@@ -1,3 +1,4 @@
+````markdown
 # 📱 DailySpend (LoveLedger)
 
 **Modern. Private. Seamless.**  
@@ -46,3 +47,55 @@ DailySpend is a sleek, privacy-focused personal finance manager for iOS. By leve
 #### 1. Clone the Repository
 ```bash
 git clone https://github.com/yourusername/DailySpend.git
+````
+
+#### 2. Open Project
+
+Open `LoveLedger.xcodeproj` in Xcode.
+
+#### 3. Configure Signing
+
+Select your **Development Team** in the **Signing & Capabilities** tab.
+
+#### 4. iCloud Setup (Optional)
+
+Enable the **iCloud** capability and ensure your **CloudKit container** is correctly assigned.
+
+#### 5. Run
+
+Select your device or simulator and press **Cmd + R**.
+
+---
+
+## 📂 Project Navigation
+
+* `Expense.swift` — Core data schemas
+* `HomeViews.swift` — Main dashboard and budget tracking
+* `InsightsViews.swift` — Analytical charts and calendar logic
+* `TransactionViews.swift` — Add/Edit flows and OCR scanning logic
+* `SettingsView.swift` — Configuration, iCloud status, and backup tools
+* `AppUtils.swift` — Localization engine (L10n) and helper services
+
+---
+
+## 🔒 Privacy First
+
+DailySpend is designed with **zero-tracking** in mind.
+
+* **Local-First:** Data lives on your device
+* **Apple-Secure:** Syncing uses your private iCloud storage
+* **No Third Parties:** No external analytics or trackers included
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License**.
+See the `LICENSE` file for full details.
+
+---
+
+Created with ❤️ by **Jackson**
+
+```
+```
