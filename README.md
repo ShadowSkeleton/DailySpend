@@ -1,2 +1,48 @@
-📱 DailySpend (LoveLedger)Modern. Private. Seamless.A premium expense tracking experience built with SwiftUI and SwiftData.DailySpend is a sleek, privacy-focused personal finance manager for iOS. By leveraging the power of SwiftUI and SwiftData, it provides a lightning-fast interface to track spending, manage budgets, and visualize your financial health with full iCloud synchronization across your devices.✨ Core FeaturesFeatureDescription⚡️ Quick LogRecord expenses in seconds with a highly optimized input flow.🔍 OCR ScannerScan receipts using the camera to automatically detect total amounts.📊 Smart BudgetingSet global monthly targets or specific category-level limits.🔁 RecurringSupport for Daily, Weekly, Monthly, and Yearly automated entries.📈 Rich InsightsVisual trends, category breakdowns, and a detailed activity calendar.☁️ iCloud SyncYour data stays in sync via CloudKit without third-party servers.📦 Data PortabilityFull JSON backup/restore and CSV export for external analysis.🛠 Tech StackUI Architecture: SwiftUI (Declarative UI)Data Engine: SwiftData (with CloudKit integration)Visualizations: Swift ChartsScanning Engine: VisionKit & Vision (OCR)Notifications: UserNotificationsWidgets: WidgetKit🚀 Getting StartedPrerequisitesmacOS: 14.0 (Sonoma) or later.Xcode: 15.0 or later.Device: iOS 17.0+ (Required for SwiftData).InstallationClone the Repositorygit clone [https://github.com/yourusername/DailySpend.git](https://github.com/yourusername/DailySpend.git)
-Open ProjectOpen LoveLedger.xcodeproj in Xcode.Configure SigningSelect your Development Team in the Signing & Capabilities tab.iCloud Setup (Optional)Enable the iCloud capability and ensure your CloudKit container is correctly assigned.RunSelect your device/simulator and press Cmd + R.📂 Project NavigationExpense.swift — The core data schemas.HomeViews.swift — The main dashboard and budget tracking.InsightsViews.swift — Analytical charts and calendar logic.TransactionViews.swift — Add/Edit flows and OCR scanning logic.SettingsView.swift — Configuration, iCloud status, and backup tools.AppUtils.swift — Localization engine (L10n) and helper services.🔒 Privacy FirstDailySpend is designed with zero-tracking in mind.Local-First: Data lives on your device.Apple-Secure: Syncing uses your private iCloud storage.No Third Parties: No external analytics or trackers are included.📄 LicenseThis project is licensed under the MIT License. See the LICENSE file for full details.Created with ❤️ by Jackson
+# 📱 DailySpend (LoveLedger)
+
+**Modern. Private. Seamless.**  
+A premium expense tracking experience built with **SwiftUI** and **SwiftData**.
+
+DailySpend is a sleek, privacy-focused personal finance manager for iOS. By leveraging the power of SwiftUI and SwiftData, it provides a lightning-fast interface to track spending, manage budgets, and visualize your financial health — with full **iCloud synchronization** across your devices.
+
+---
+
+## ✨ Core Features
+
+| Feature | Description |
+|------|------------|
+| ⚡️ **Quick Log** | Record expenses in seconds with a highly optimized input flow. |
+| 🔍 **OCR Scanner** | Scan receipts using the camera to automatically detect total amounts. |
+| 📊 **Smart Budgeting** | Set global monthly targets or specific category-level limits. |
+| 🔁 **Recurring** | Support for Daily, Weekly, Monthly, and Yearly automated entries. |
+| 📈 **Rich Insights** | Visual trends, category breakdowns, and a detailed activity calendar. |
+| ☁️ **iCloud Sync** | Your data stays in sync via CloudKit without third-party servers. |
+| 📦 **Data Portability** | Full JSON backup/restore and CSV export for external analysis. |
+
+---
+
+## 🛠 Tech Stack
+
+- **UI Architecture:** SwiftUI (Declarative UI)  
+- **Data Engine:** SwiftData (with CloudKit integration)  
+- **Visualizations:** Swift Charts  
+- **Scanning Engine:** VisionKit & Vision (OCR)  
+- **Notifications:** UserNotifications  
+- **Widgets:** WidgetKit  
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **macOS:** 14.0 (Sonoma) or later  
+- **Xcode:** 15.0 or later  
+- **Device:** iOS 17.0+ (Required for SwiftData)  
+
+---
+
+### Installation
+
+#### 1. Clone the Repository
+```bash
+git clone https://github.com/yourusername/DailySpend.git
