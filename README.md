@@ -1,4 +1,4 @@
-````markdown
+
 # 📱 DailySpend (LoveLedger)
 
 **Modern. Private. Seamless.**  
