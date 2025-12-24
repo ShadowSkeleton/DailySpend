@@ -1,32 +1,13 @@
-//
-//  LoveLedgerApp.swift
-//  LoveLedger
-//
-//  Created by Jackson Feng on 12/4/25.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct LoveLedgerApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(sharedModelContainer)
+        // 关键：注册所有模型
+        .modelContainer(for: [Expense.self, CategoryBudget.self])
     }
 }
