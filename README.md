@@ -96,6 +96,3 @@ See the `LICENSE` file for full details.
 ---
 
 Created with ❤️ by **Jackson**
-
-```
-```
