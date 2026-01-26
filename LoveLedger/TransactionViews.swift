@@ -6,6 +6,15 @@ struct AddExpenseView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     var themeColor: Color
+    
+    // 预填充数据
+    var prefilledAmount: Double?
+    var prefilledNote: String?
+    var prefilledCategory: String?
+    
+    // ✨ 新增：保存成功后的回调
+    var onSave: (() -> Void)? = nil
+    
     @State private var amount: Double?
     @State private var category = "Food"
     @State private var note = ""
@@ -15,7 +24,6 @@ struct AddExpenseView: View {
     @AppStorage("showScanTip") private var showScanTip = true
     @State private var showScanAlert = false
     
-    // ✨ 新增：频率选择状态
     @State private var frequency: RecurrenceFrequency = .none
     
     let columns = [GridItem(.adaptive(minimum: 75))]
@@ -37,7 +45,16 @@ struct AddExpenseView: View {
                 
                 VStack {
                     Button(action: saveExpense) {
-                        Text(L10n.save).font(.headline).fontWeight(.bold).foregroundColor(.white).frame(maxWidth: .infinity).padding(.vertical, 16).background { RoundedRectangle(cornerRadius: 16).fill(amount == nil ? Color.gray.opacity(0.3) : themeColor) }
+                        Text(L10n.save)
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(amount == nil ? Color.gray.opacity(0.3) : themeColor)
+                            }
                     }
                     .disabled(amount == nil)
                     .padding(.horizontal).padding(.top, 12).padding(.bottom, 8)
@@ -49,7 +66,13 @@ struct AddExpenseView: View {
                 ToolbarItem(placement: .cancellationAction) { Button(L10n.cancel) { dismiss() }.tint(.primary) }
             }
             .onAppear {
-                if !showingScanner { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { isInputActive = true } }
+                if let initialAmount = prefilledAmount, amount == nil { amount = initialAmount }
+                if let initialNote = prefilledNote, note.isEmpty { note = initialNote }
+                if let initialCat = prefilledCategory { category = initialCat }
+                
+                if amount == nil && !showingScanner {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { isInputActive = true }
+                }
             }
             .alert(L10n.scanTipTitle, isPresented: $showScanAlert) {
                 Button(L10n.dontShowAgain) { showScanTip = false; showingScanner = true }
@@ -90,7 +113,6 @@ struct AddExpenseView: View {
         VStack(spacing: 0) {
             DatePicker(L10n.date, selection: $date, displayedComponents: .date).padding()
             Divider()
-            // ✨ 新增：频率选择器
             HStack {
                 Text(L10n.recurrence)
                 Spacer()
@@ -109,10 +131,23 @@ struct AddExpenseView: View {
     
     private func saveExpense() {
         guard let validAmount = amount else { return }
-        // ✨ 保存时写入 frequency
-        modelContext.insert(Expense(amount: validAmount, category: category, note: note, date: date, frequency: frequency))
+        
+        let newExpense = Expense(
+            amount: validAmount,
+            category: category,
+            note: note,
+            date: date,
+            frequency: frequency
+        )
+        
+        modelContext.insert(newExpense)
+        try? modelContext.save()
+        
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
+        
+        // ✨ 先触发回调，再 dismiss
+        onSave?()
         dismiss()
     }
 }
@@ -123,13 +158,12 @@ struct EditExpenseView: View {
     @Environment(\.dismiss) private var dismiss
     var expense: Expense
     var themeColor: Color
+    
     @State private var amount: Double
     @State private var category: String
     @State private var note: String
     @State private var date: Date
     @FocusState private var isInputActive: Bool
-    
-    // ✨ 修复：使用 safeFrequency 初始化
     @State private var frequency: RecurrenceFrequency
     
     let columns = [GridItem(.adaptive(minimum: 75))]
@@ -142,7 +176,6 @@ struct EditExpenseView: View {
         _category = State(initialValue: expense.category)
         _note = State(initialValue: expense.note)
         _date = State(initialValue: expense.date)
-        // ✨ 关键修复：使用 safeFrequency 安全访问
         _frequency = State(initialValue: expense.safeFrequency)
     }
     
@@ -203,7 +236,6 @@ struct EditExpenseView: View {
         VStack(spacing: 0) {
             DatePicker(L10n.date, selection: $date, displayedComponents: .date).padding()
             Divider()
-            // ✨ 新增：频率编辑
             HStack {
                 Text(L10n.recurrence)
                 Spacer()
@@ -221,12 +253,17 @@ struct EditExpenseView: View {
     }
     
     private func saveChanges() {
+        let isFrequencyChanged = expense.safeFrequency != frequency
+        let isDateChanged = !Calendar.current.isDate(expense.date, inSameDayAs: date)
+        if isFrequencyChanged || isDateChanged { expense.lastProcessedDate = nil }
+        
         expense.amount = amount
         expense.category = category
         expense.note = note
         expense.date = date
-        // ✨ 更新频率
         expense.frequency = frequency
+        
+        try? modelContext.save()
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
         dismiss()
@@ -234,6 +271,7 @@ struct EditExpenseView: View {
     
     private func deleteExpense() {
         modelContext.delete(expense)
+        try? modelContext.save()
         dismiss()
     }
 }

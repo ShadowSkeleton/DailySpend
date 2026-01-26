@@ -2,23 +2,46 @@ import SwiftUI
 import WidgetKit
 import UserNotifications
 
-// MARK: - 0. 数据共享工具
+// MARK: - ✨ Recurrence Engine
+struct RecurrenceEngine {
+    static func nextDueDate(initialDate: Date, lastProcessed: Date?, frequency: RecurrenceFrequency) -> Date? {
+        let calendar = Calendar.current
+        let now = Date()
+        let baseDate = lastProcessed ?? initialDate
+        var nextDate: Date?
+        
+        switch frequency {
+        case .none: return nil
+        case .daily: nextDate = calendar.date(byAdding: .day, value: 1, to: baseDate)
+        case .weekly: nextDate = calendar.date(byAdding: .weekOfYear, value: 1, to: baseDate)
+        case .monthly:
+            if let last = lastProcessed {
+                let components = calendar.dateComponents([.month], from: initialDate, to: last)
+                let nextMonthOffset = (components.month ?? 0) + 1
+                nextDate = calendar.date(byAdding: .month, value: nextMonthOffset, to: initialDate)
+            } else {
+                nextDate = calendar.date(byAdding: .month, value: 1, to: initialDate)
+            }
+        case .yearly: nextDate = calendar.date(byAdding: .year, value: 1, to: baseDate)
+        }
+        
+        if let target = nextDate, target <= now, target > baseDate {
+            return target
+        }
+        return nil
+    }
+}
+
+// MARK: - Widget Data Service
 struct WidgetDataService {
     static let appGroup = "group.com.jackson.LoveLedger"
-    
     static func saveToWidget(expenses: [Expense], budget: Double, isBudgetEnabled: Bool) {
         let calendar = Calendar.current
         let now = Date()
-        
-        // 1. 计算本月总额
         let currentMonthTotal = expenses
             .filter { calendar.isDate($0.date, equalTo: now, toGranularity: .month) }
             .reduce(0) { $0 + $1.amount }
-        
-        // 2. ✨ 计算过去 7 天的趋势数据 (用于小组件图表)
-        // 结果是一个 [Double] 数组，例如 [0, 50, 20, 100, 0, 15, 30]
         var chartData: [Double] = []
-        // 获取过去 6 天 + 今天
         for i in (0..<7).reversed() {
             if let date = calendar.date(byAdding: .day, value: -i, to: now) {
                 let dailyTotal = expenses
@@ -27,22 +50,18 @@ struct WidgetDataService {
                 chartData.append(dailyTotal)
             }
         }
-        
-        // 3. 写入 UserDefaults
         if let store = UserDefaults(suiteName: appGroup) {
             store.set(currentMonthTotal, forKey: "widget_total")
             store.set(budget, forKey: "widget_budget")
             store.set(isBudgetEnabled, forKey: "widget_isBudgetEnabled")
-            store.set(chartData, forKey: "widget_chartData") // ✨ 新增
+            store.set(chartData, forKey: "widget_chartData")
             store.set(Date(), forKey: "widget_lastUpdated")
         }
-        
-        // 4. 刷新小组件
         WidgetCenter.shared.reloadAllTimelines()
     }
 }
 
-// MARK: - 1. 本地化翻译引擎
+// MARK: - L10n
 struct L10n {
     static var isZh: Bool {
         guard let lang = Locale.preferredLanguages.first else { return false }
@@ -52,9 +71,12 @@ struct L10n {
     static var currencyCode: String { Locale.current.currency?.identifier ?? "USD" }
     static var currencySymbol: String { currencyCode == "CNY" ? "¥" : "$" }
     
+    // Core
     static var home: String { isZh ? "首页" : "Home" }
     static var insights: String { isZh ? "统计" : "Insights" }
     static var settings: String { isZh ? "设置" : "Settings" }
+    
+    // Dashboard
     static var thisMonth: String { isZh ? "本月支出" : "THIS MONTH" }
     static var remaining: String { isZh ? "本月剩余" : "REMAINING" }
     static var overBudget: String { isZh ? "已超支" : "OVER BUDGET" }
@@ -62,6 +84,8 @@ struct L10n {
     static var recentTransactions: String { isZh ? "最近记录" : "Recent Transactions" }
     static var noExpensesTitle: String { isZh ? "暂无账单" : "No Expenses Yet" }
     static var noExpensesDesc: String { isZh ? "点击 + 号记一笔" : "Tap + to track your first spending." }
+    
+    // Editor
     static var newExpense: String { isZh ? "记一笔" : "New Expense" }
     static var editExpense: String { isZh ? "编辑账单" : "Edit Expense" }
     static var amount: String { isZh ? "金额" : "AMOUNT" }
@@ -71,14 +95,22 @@ struct L10n {
     static var save: String { isZh ? "保存" : "Save" }
     static var cancel: String { isZh ? "取消" : "Cancel" }
     static var deleteTransaction: String { isZh ? "删除" : "Delete" }
+    
+    // Insights
     static var spendingBreakdown: String { isZh ? "支出构成" : "Spending Breakdown" }
     static var topSpending: String { isZh ? "花费排行" : "Top Spending" }
     static var total: String { isZh ? "总计" : "Total" }
     static var tapTotalAmount: String { isZh ? "请点击小票上的总金额" : "Tap the Total Amount" }
     static var timeRanges: [String] { isZh ? ["本月", "上月", "今年", "全部"] : ["This Month", "Last Month", "This Year", "All Time"] }
     static var noDataFor: String { isZh ? "暂无数据: " : "No data for " }
+    static var chartView: String { isZh ? "图表" : "Chart" }
+    static var calendarView: String { isZh ? "日历" : "Calendar" }
+    static var noSpendDay: String { isZh ? "🎉 完美！今天零支出" : "🎉 Amazing! No spend day." }
+    static var dailyTotal: String { isZh ? "当日支出" : "Daily Total" }
+    static var trends: String { isZh ? "趋势" : "Trends" }
+    static var activity: String { isZh ? "动态" : "Activity" }
     
-    // ✨ Recurrence (周期性)
+    // Recurrence
     static var recurrence: String { isZh ? "重复周期" : "Repeat" }
     static var recurrenceNone: String { isZh ? "不重复" : "None" }
     static var recurrenceDaily: String { isZh ? "每天" : "Daily" }
@@ -86,13 +118,7 @@ struct L10n {
     static var recurrenceMonthly: String { isZh ? "每月" : "Monthly" }
     static var recurrenceYearly: String { isZh ? "每年" : "Yearly" }
     
-    // Insights Tabs
-    static var chartView: String { isZh ? "图表" : "Chart" }
-    static var calendarView: String { isZh ? "日历" : "Calendar" }
-    static var noSpendDay: String { isZh ? "🎉 完美！今天零支出" : "🎉 Amazing! No spend day." }
-    static var dailyTotal: String { isZh ? "当日支出" : "Daily Total" }
-    
-    // Budget Settings
+    // Budget & Settings
     static var budgetEnable: String { isZh ? "启用月度预算" : "Enable Monthly Budget" }
     static var budgetAmount: String { isZh ? "预算金额" : "Budget Amount" }
     static var budgetRequired: String { isZh ? "⚠️ 请输入预算金额" : "⚠️ Budget amount required" }
@@ -106,7 +132,7 @@ struct L10n {
     static var done: String { isZh ? "完成" : "Done" }
     static var ok: String { isZh ? "知道了" : "OK" }
     
-    // Scanning Tip
+    // Scanner
     static var scanTipTitle: String { isZh ? "💡 扫描提示" : "💡 Scanning Tip" }
     static var scanTipMessage: String { isZh ? "拍摄完成后，请点击右上角的 'Save' (保存) 以开始识别。" : "After capturing the receipt, tap 'Save' at the top right to process." }
     static var dontShowAgain: String { isZh ? "不再提示" : "Don't show again" }
@@ -122,12 +148,28 @@ struct L10n {
     static var restoreSuccess: String { isZh ? "数据已恢复！\n请检查 '最近记录' 确认日期。" : "Data restored!\nCheck 'Recent Transactions' for dates." }
     static var errorTitle: String { isZh ? "出错了" : "Error" }
     
-    // iCloud Status
+    // iCloud
     static var iCloudStatus: String { isZh ? "iCloud 状态" : "iCloud Status" }
     static var iCloudAvailable: String { isZh ? "已连接 (自动同步中)" : "Signed In (Auto Sync)" }
     static var iCloudUnavailable: String { isZh ? "未连接 (请检查设置)" : "Signed Out (Check Settings)" }
     static var iCloudRestricted: String { isZh ? "受限" : "Restricted" }
     static var iCloudVerifying: String { isZh ? "正在检查..." : "Verifying..." }
+    
+    // ✨ Split Bill (Updated for Clarity & Bilingual)
+    static var splitModeEvenly: String { isZh ? "平分" : "Evenly" }
+    static var splitModeItemized: String { isZh ? "按项" : "Itemized" }
+    static var tax: String { isZh ? "税费" : "Tax" }
+    static var subtotal: String { isZh ? "餐费小计" : "Subtotal" }
+    
+    // ✨ UX Improvements & Missing Keys Fix
+    static var addItemOrPerson: String { isZh ? "添加项目 / 人" : "Add Item / Person" }
+    static var itemNamePlaceholder: String { isZh ? "例如: 汉堡 或 小明" : "e.g., Burger or Alice" }
+    // 修复: 之前缺失的 itemizedHelper
+    static var itemizedHelper: String { isZh ? "输入具体菜名（如牛排）或人名，我们将按比例分配税费和小费。" : "Enter specific items (e.g. Steak) or people. Tax & tip will be split proportionally." }
+    static var recordThisShare: String { isZh ? "记这笔" : "Record" }
+    // 修复: 之前缺失的 breakdown 和 breakdownSubtitle
+    static var breakdown: String { isZh ? "分配明细" : "Breakdown" }
+    static var breakdownSubtitle: String { isZh ? "(含分摊后的税和小费)" : "(incl. shared tax & tip)" }
     
     static func categoryName(_ id: String) -> String {
         guard isZh else { return id }
@@ -156,7 +198,6 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
         let components = Calendar.current.dateComponents([.hour, .minute], from: time)
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-        // 修复：移除了多余的转义反斜杠
         center.add(UNNotificationRequest(identifier: "dailyBudget", content: content, trigger: trigger))
     }
 }

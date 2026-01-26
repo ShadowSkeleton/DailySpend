@@ -243,15 +243,22 @@ struct HomeHeaderView: View {
                 }
             }
             .contentShape(Rectangle())
+            // ✨ 核心逻辑：拖拽手势
             .gesture(
                 DragGesture()
                     .onEnded { value in
-                        if value.translation.width < -50 { changeMonth(by: 1) }
-                        else if value.translation.width > 50 { changeMonth(by: -1) }
+                        if value.translation.width < -50 {
+                            // 左滑 (前往下个月)
+                            changeMonth(by: 1)
+                        }
+                        else if value.translation.width > 50 {
+                            // 右滑 (前往上个月)
+                            changeMonth(by: -1)
+                        }
                     }
             )
             
-            // ✨ Part B: 分类超支胶囊 (独立滚动区)
+            // Part B: 分类超支胶囊 (独立滚动区)
             if isBudgetEnabled && budgetAmount > 0 && !overBudgetItems.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
@@ -274,20 +281,13 @@ struct HomeHeaderView: View {
                             .onTapGesture { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                         }
                     }
-                    // 内边距对齐
                     .padding(.horizontal, 24)
                     .scrollTargetLayout()
                 }
-                // 容器外扩
                 .padding(.horizontal, -24)
-                
-                // ✨ Mask 优化：左侧完全展示，只有右侧淡出
                 .mask(
                     HStack(spacing: 0) {
-                        // 左侧实色 (完全不透明)
                         Rectangle().fill(Color.black)
-                        
-                        // 右侧渐变 (黑 -> 透明)
                         LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
                             .frame(width: 24)
                     }
@@ -311,14 +311,36 @@ struct HomeHeaderView: View {
         }
     }
     
+    // ✨ 核心修改：月份切换逻辑
     func changeMonth(by value: Int) {
-        if let newDate = Calendar.current.date(byAdding: .month, value: value, to: currentMonth) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                currentMonth = newDate
+        let calendar = Calendar.current
+        
+        // 1. 计算目标日期
+        guard let newDate = calendar.date(byAdding: .month, value: value, to: currentMonth) else { return }
+        
+        // 2. 检查未来限制：如果目标月份晚于当前真实月份，则禁止跳转
+        let now = Date()
+        let targetComponents = calendar.dateComponents([.year, .month], from: newDate)
+        let currentComponents = calendar.dateComponents([.year, .month], from: now)
+        
+        if let tYear = targetComponents.year, let tMonth = targetComponents.month,
+           let cYear = currentComponents.year, let cMonth = currentComponents.month {
+            
+            // 如果年份更大，或者年份相同但月份更大
+            if tYear > cYear || (tYear == cYear && tMonth > cMonth) {
+                // 触发错误触感反馈，告知用户不可操作
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.warning)
+                return
             }
-            let generator = UIImpactFeedbackGenerator(style: .light)
-            generator.impactOccurred()
         }
+        
+        // 3. 执行切换
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            currentMonth = newDate
+        }
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
     }
     
     var monthTitle: String {

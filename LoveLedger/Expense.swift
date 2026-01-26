@@ -35,7 +35,6 @@ final class CategoryBudget {
     }
 }
 
-// ✨ 关键修复：frequency 改为 Optional，兼容旧数据
 @Model
 final class Expense {
     var id: UUID = UUID()
@@ -44,19 +43,27 @@ final class Expense {
     var note: String = ""
     var date: Date = Date()
     
-    // ✨ 核心修复：改为 Optional，旧数据会自动返回 nil
+    // 频率：Optional 兼容旧数据
     var frequency: RecurrenceFrequency? = RecurrenceFrequency.none
     
-    init(amount: Double, category: String, note: String, date: Date = Date(), frequency: RecurrenceFrequency = .none) {
+    // 核心字段：记录上一次自动生成的时间
+    var lastProcessedDate: Date? = nil
+    
+    // ✨ 新增字段：标记这是否是自动生成的子账单
+    // 作用：让 UI 可以显示 Recurring 图标，但逻辑层知道不要再次处理它
+    var isRecurringChild: Bool = false
+    
+    init(amount: Double, category: String, note: String, date: Date = Date(), frequency: RecurrenceFrequency = .none, lastProcessedDate: Date? = nil, isRecurringChild: Bool = false) {
         self.id = UUID()
         self.amount = amount
         self.category = category
         self.note = note
         self.date = date
         self.frequency = frequency
+        self.lastProcessedDate = lastProcessedDate
+        self.isRecurringChild = isRecurringChild
     }
     
-    // ✨ 便捷属性：安全获取 frequency
     var safeFrequency: RecurrenceFrequency {
         return frequency ?? .none
     }

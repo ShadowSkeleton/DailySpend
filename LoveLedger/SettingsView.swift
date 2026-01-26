@@ -21,13 +21,13 @@ struct SettingsView: View {
     @AppStorage("alertThreshold") private var alertThreshold = 100.0
     @AppStorage("dailyNotify") private var dailyNotify = false
     @AppStorage("notifyTime") private var notifyTime: Double = 0
+    @AppStorage("lastSyncTimestamp") private var lastSyncTimestamp: Double = 0
     
     @State private var timeDate: Date = Date()
     @FocusState private var isInputFocused: Bool
     
     @Environment(\.modelContext) private var modelContext
     @Query private var allExpenses: [Expense]
-    // 实时查询分类预算数量
     @Query private var categoryBudgets: [CategoryBudget]
     
     @State private var showFileImporter = false
@@ -36,10 +36,12 @@ struct SettingsView: View {
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
-    
     @State private var importedData: [ExpenseBackupItem]?
     @State private var jsonDocument: JSONBackupDocument?
     @State private var showCategoryBudgetSheet = false
+    
+    // 控制 About 页面
+    @State private var showAboutSheet = false
     
     @State private var iCloudStatusText: String = L10n.iCloudVerifying
     @State private var iCloudIconColor: Color = .gray
@@ -52,18 +54,71 @@ struct SettingsView: View {
         return formatter
     }
     
+    var lastSyncFormatted: String {
+        if lastSyncTimestamp == 0 { return "--" }
+        let date = Date(timeIntervalSince1970: lastSyncTimestamp)
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
     var body: some View {
         Form {
             // MARK: - iCloud Section
             Section {
-                HStack {
-                    Image(systemName: "icloud.fill").font(.title2).foregroundStyle(iCloudIconColor)
-                    VStack(alignment: .leading) {
-                        Text("iCloud").font(.headline)
-                        Text(iCloudStatusText).font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: iCloudIconColor == .blue ? [.blue, .cyan] : [Color.gray.opacity(0.3), Color.gray.opacity(0.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 48, height: 48)
+                        
+                        Image(systemName: "icloud.fill")
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .shadow(radius: 2)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.isZh ? "iCloud 同步" : "iCloud Sync")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(iCloudIconColor)
+                                .frame(width: 8, height: 8)
+                            Text(iCloudStatusText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    if iCloudIconColor == .blue {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(L10n.isZh ? "上次同步" : "Last Synced")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(lastSyncFormatted)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.leading, 4)
                     }
                 }
+                .padding(.vertical, 6)
             }
+            .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
             
             // MARK: - Budget Section
             Section(header: Text("Budget")) {
@@ -74,7 +129,6 @@ struct SettingsView: View {
                     }
                 
                 if isBudgetEnabled {
-                    // 1. 总预算输入
                     HStack {
                         Text(L10n.budgetAmount)
                         Spacer()
@@ -100,31 +154,22 @@ struct SettingsView: View {
                             .foregroundStyle(.orange)
                     }
                     
-                    // 分类预算入口
                     HStack {
                         Text(L10n.isZh ? "分类预算 (可选)" : "Category Limits (Optional)")
                             .foregroundStyle(Color.primary)
                         Spacer()
                         if !categoryBudgets.isEmpty {
-                            Text("\(categoryBudgets.count) set")
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
+                            Text("\(categoryBudgets.count) set").foregroundStyle(.secondary).font(.caption)
                         }
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(Color(uiColor: .tertiaryLabel))
+                        Image(systemName: "chevron.right").font(.caption).fontWeight(.bold).foregroundStyle(Color(uiColor: .tertiaryLabel))
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
                         hideKeyboard()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            showCategoryBudgetSheet = true
-                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { showCategoryBudgetSheet = true }
                     }
                     
                     Toggle(L10n.dailyNotification, isOn: $dailyNotify).tint(themeColor)
-                    
                     if dailyNotify {
                         DatePicker(L10n.notificationTime, selection: $timeDate, displayedComponents: .hourAndMinute)
                             .onChange(of: timeDate) { _, newValue in notifyTime = newValue.timeIntervalSince1970 }
@@ -132,30 +177,47 @@ struct SettingsView: View {
                 }
             }
             
-            // MARK: - Data Management Section
+            // MARK: - Data Management
             Section(header: Text(L10n.dataManagement)) {
-                // 备份按钮
                 HStack {
-                    Label(L10n.backupData, systemImage: "square.and.arrow.up")
-                        .foregroundStyle(themeColor)
+                    Label(L10n.backupData, systemImage: "square.and.arrow.up").foregroundStyle(themeColor)
                     Spacer()
                 }
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    hideKeyboard()
-                    prepareBackup()
-                }
+                .onTapGesture { hideKeyboard(); prepareBackup() }
                 
-                // 恢复按钮
                 HStack {
-                    Label(L10n.restoreData, systemImage: "square.and.arrow.down")
-                        .foregroundStyle(.orange)
+                    Label(L10n.restoreData, systemImage: "square.and.arrow.down").foregroundStyle(.orange)
                     Spacer()
                 }
                 .contentShape(Rectangle())
+                .onTapGesture { hideKeyboard(); showFileImporter = true }
+            }
+            
+            // MARK: - ✨ About Section (Optimized Touch)
+            Section {
+                // 修复：不再使用 Button，改用 HStack + contentShape + onTapGesture
+                // 这样整个行都是点击热区，反应更灵敏
+                HStack {
+                    Label {
+                        Text(L10n.isZh ? "关于 DailySpend" : "About DailySpend")
+                            .foregroundStyle(.primary)
+                    } icon: {
+                        Image(systemName: "heart.text.square.fill")
+                            .foregroundStyle(.pink)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle()) // 关键：确保整行可点击
                 .onTapGesture {
                     hideKeyboard()
-                    showFileImporter = true
+                    // 增加一点微小的触觉反馈
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    showAboutSheet = true
                 }
             }
         }
@@ -167,18 +229,9 @@ struct SettingsView: View {
             if notifyTime == 0 { var components = Calendar.current.dateComponents([.year, .month, .day], from: Date()); components.hour = 10; components.minute = 0; let defaultTime = Calendar.current.date(from: components) ?? Date(); timeDate = defaultTime; notifyTime = defaultTime.timeIntervalSince1970 } else { timeDate = Date(timeIntervalSince1970: notifyTime) }
             checkiCloudStatus()
         }
-        // Sheets & Alerts
-        .sheet(isPresented: $showCategoryBudgetSheet) {
-            CategoryBudgetSettingView(themeColor: themeColor)
-        }
-        .fileExporter(isPresented: $showFileExporter, document: jsonDocument, contentType: .json, defaultFilename: "DailySpend_Backup") { result in
-            switch result {
-            case .success: print("Export success")
-            case .failure(let error):
-                self.errorMessage = "System Error: \(error.localizedDescription)"
-                self.showErrorAlert = true
-            }
-        }
+        .sheet(isPresented: $showCategoryBudgetSheet) { CategoryBudgetSettingView(themeColor: themeColor) }
+        .sheet(isPresented: $showAboutSheet) { AboutView() }
+        .fileExporter(isPresented: $showFileExporter, document: jsonDocument, contentType: .json, defaultFilename: "DailySpend_Backup") { _ in }
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.json]) { result in
             switch result {
             case .success(let url):
@@ -188,58 +241,34 @@ struct SettingsView: View {
                         let data = try Data(contentsOf: url)
                         let decoder = JSONDecoder()
                         var items: [ExpenseBackupItem] = []
-                        
-                        // 尝试 1: 新格式 (带日期字符串)
                         decoder.dateDecodingStrategy = .formatted(backupDateFormatter)
-                        do {
-                            items = try decoder.decode([ExpenseBackupItem].self, from: data)
-                        } catch {
-                            // 尝试 2: 旧格式
-                            let legacyDecoder = JSONDecoder()
-                            legacyDecoder.dateDecodingStrategy = .secondsSince1970
+                        do { items = try decoder.decode([ExpenseBackupItem].self, from: data) }
+                        catch {
+                            let legacyDecoder = JSONDecoder(); legacyDecoder.dateDecodingStrategy = .secondsSince1970
                             items = try legacyDecoder.decode([ExpenseBackupItem].self, from: data)
                         }
-                        
-                        DispatchQueue.main.async {
-                            self.importedData = items
-                            self.showRestoreAlert = true
-                        }
-                    } catch {
-                        DispatchQueue.main.async {
-                            self.errorMessage = "Format Error: Data might be corrupted.\n\(error.localizedDescription)"
-                            self.showErrorAlert = true
-                        }
-                    }
-                } else {
-                    self.errorMessage = "Permission denied."
-                    self.showErrorAlert = true
+                        DispatchQueue.main.async { self.importedData = items; self.showRestoreAlert = true }
+                    } catch { self.errorMessage = "Error: \(error.localizedDescription)"; self.showErrorAlert = true }
                 }
-            case .failure(let error):
-                self.errorMessage = error.localizedDescription
-                self.showErrorAlert = true
+            case .failure(let error): self.errorMessage = error.localizedDescription; self.showErrorAlert = true
             }
         }
-        // ✨ 优化：将 Alert 挂载到 Form 上，防止冲突
         .alert(L10n.restoreAlertTitle, isPresented: $showRestoreAlert) {
             Button(L10n.cancel, role: .cancel) { }
             Button(L10n.restoreData, role: .destructive) { performRestore() }
         } message: { Text(L10n.restoreAlertMessage) }
-        
-        // ✨ 将 Success Alert 单独挂载，避免与 Restore Alert 冲突
-        .alert(L10n.success, isPresented: $showSuccessAlert) {
-            Button(L10n.ok) { }
-        } message: { Text(L10n.restoreSuccess) }
-        
-        .alert(L10n.errorTitle, isPresented: $showErrorAlert) {
-            Button(L10n.ok) { }
-        } message: { Text(errorMessage) }
+        .alert(L10n.success, isPresented: $showSuccessAlert) { Button(L10n.ok) { } } message: { Text(L10n.restoreSuccess) }
+        .alert(L10n.errorTitle, isPresented: $showErrorAlert) { Button(L10n.ok) { } } message: { Text(errorMessage) }
     }
     
     func checkiCloudStatus() {
         CKContainer.default().accountStatus { status, error in
             DispatchQueue.main.async {
                 switch status {
-                case .available: self.iCloudStatusText = L10n.iCloudAvailable; self.iCloudIconColor = .blue
+                case .available:
+                    self.iCloudStatusText = L10n.iCloudAvailable
+                    self.iCloudIconColor = .blue
+                    self.lastSyncTimestamp = Date().timeIntervalSince1970
                 case .noAccount: self.iCloudStatusText = L10n.iCloudUnavailable; self.iCloudIconColor = .red
                 case .restricted: self.iCloudStatusText = L10n.iCloudRestricted; self.iCloudIconColor = .orange
                 default: self.iCloudStatusText = "Unknown"; self.iCloudIconColor = .gray
@@ -248,87 +277,173 @@ struct SettingsView: View {
         }
     }
     
-    // ✨ 关键修复：使用 FetchDescriptor 安全地获取数据
     func prepareBackup() {
         do {
-            // 使用 FetchDescriptor 直接从数据库获取，避免使用可能有问题的 @Query 缓存
             let fetchDescriptor = FetchDescriptor<Expense>(sortBy: [SortDescriptor(\.date, order: .reverse)])
             let expenses = try modelContext.fetch(fetchDescriptor)
-            
             var items: [ExpenseBackupItem] = []
-            
             for expense in expenses {
-                // ✨ 使用 safeFrequency 安全访问
-                let item = ExpenseBackupItem(
-                    amount: expense.amount,
-                    category: expense.category,
-                    note: expense.note,
-                    date: expense.date,
-                    frequency: expense.safeFrequency
-                )
-                items.append(item)
+                items.append(ExpenseBackupItem(amount: expense.amount, category: expense.category, note: expense.note, date: expense.date, frequency: expense.safeFrequency))
             }
-            
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .formatted(backupDateFormatter)
             encoder.outputFormatting = .prettyPrinted
             let encoded = try encoder.encode(items)
-            
-            DispatchQueue.main.async {
-                self.jsonDocument = JSONBackupDocument(data: encoded)
-                self.showFileExporter = true
-            }
-        } catch {
-            self.errorMessage = "Backup failed: \(error.localizedDescription)"
-            self.showErrorAlert = true
-        }
+            DispatchQueue.main.async { self.jsonDocument = JSONBackupDocument(data: encoded); self.showFileExporter = true }
+        } catch { self.errorMessage = "Backup failed: \(error.localizedDescription)"; self.showErrorAlert = true }
     }
     
     func performRestore() {
         guard let items = importedData else { return }
-        
-        // ✨ 关键修复：使用 FetchDescriptor 重新获取数据，避免使用可能过期的 @Query 结果
         do {
-            // 1. 从数据库直接获取所有记录（而非使用 @Query 缓存）
-            let fetchDescriptor = FetchDescriptor<Expense>()
-            let existingExpenses = try modelContext.fetch(fetchDescriptor)
-            
-            // 2. 删除所有旧数据
-            for expense in existingExpenses {
-                modelContext.delete(expense)
-            }
-            
-            // 3. 立即保存删除操作，确保数据库状态一致
+            let existing = try modelContext.fetch(FetchDescriptor<Expense>())
+            for exp in existing { modelContext.delete(exp) }
             try modelContext.save()
-            
-            // 4. 插入新数据
             for item in items {
-                let newExpense = Expense(
-                    amount: item.amount,
-                    category: item.category,
-                    note: item.note,
-                    date: item.date,
-                    frequency: item.frequency ?? .none
-                )
-                modelContext.insert(newExpense)
+                modelContext.insert(Expense(amount: item.amount, category: item.category, note: item.note, date: item.date, frequency: item.frequency ?? .none))
             }
-            
-            // 5. 保存插入操作
             try modelContext.save()
-            
-            // 6. 延迟弹出成功提示
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.showSuccessAlert = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showSuccessAlert = true }
+        } catch { self.errorMessage = "Restore failed"; self.showErrorAlert = true }
+    }
+}
+
+// MARK: - ✨ About View (Corrected Info & Auto Build)
+struct AboutView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    // ✨ 自动获取版本号和 Build 号
+    var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "Version \(version) (Build \(build))"
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 30) {
+                    
+                    // 1. App Info Header
+                    VStack(spacing: 16) {
+                        Image(systemName: "heart.text.square.fill")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 80, height: 80)
+                            .foregroundStyle(.pink.gradient)
+                            .shadow(radius: 10)
+                        
+                        VStack(spacing: 6) {
+                            // 修正名称：DailySpend
+                            Text("DailySpend")
+                                .font(.largeTitle)
+                                .fontWeight(.heavy)
+                                .foregroundStyle(.primary)
+                            
+                            // 修正版本：自动拉取
+                            Text(appVersion)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .padding(.top, 40)
+                    
+                    // 2. Developer Credit
+                    VStack(spacing: 12) {
+                        Text("Designed & Developed by")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                            .tracking(2)
+                        
+                        Text("Jackson Feng")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(Color.primary)
+                        
+                        Text("A Personal Project")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue.gradient)
+                            .clipShape(Capsule())
+                    }
+                    
+                    Divider().padding(.horizontal, 40)
+                    
+                    // 3. Welcome Message (Updated Name)
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(L10n.isZh ? "欢迎使用！" : "Welcome!")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                        
+                        Text(L10n.isZh
+                             ? "DailySpend 是我出于个人兴趣开发的一款记账应用，旨在提供最纯粹、最隐私的记账体验。\n\n没有广告，没有追踪，只有清晰的财务洞察。"
+                             : "DailySpend is a personal passion project designed to make expense tracking simple, private, and insightful.\n\nNo ads, no tracking, just you and your financial goals.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(4)
+                    }
+                    .padding(.horizontal)
+                    .frame(maxWidth: 500)
+                    
+                    // 4. TestFlight Feedback Button
+                    Button(action: {
+                        if let url = URL(string: "itms-beta://") {
+                            UIApplication.shared.open(url)
+                        } else if let url = URL(string: "https://testflight.apple.com/") {
+                            UIApplication.shared.open(url)
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "paperplane.fill")
+                            Text(L10n.isZh ? "在 TestFlight 中反馈" : "Feedback via TestFlight")
+                                .fontWeight(.bold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.orange.gradient)
+                        .foregroundColor(.white)
+                        .cornerRadius(16)
+                        .shadow(color: .orange.opacity(0.3), radius: 10, x: 0, y: 5)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 10)
+                    
+                    Text(L10n.isZh
+                         ? "您的反馈对我非常重要！如果在测试过程中遇到 Bug 或有任何建议，欢迎随时提交反馈。"
+                         : "Your feedback means the world to me! If you spot a bug or have a feature request, please let me know.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 30)
+                    
+                    Spacer(minLength: 50)
+                    
+                    // 修正年份：2026
+                    Text("© 2026 Jackson Feng. All rights reserved.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom)
+                }
             }
-            
-        } catch {
-            self.errorMessage = "Restore failed: \(error.localizedDescription)"
-            self.showErrorAlert = true
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.done) { dismiss() }
+                }
+            }
         }
     }
 }
 
-// MARK: - Custom Month Picker Component
+// ... CategoryBudgetSettingView (Unchanged)
 struct CategoryBudgetSettingView: View {
     var themeColor: Color
     @Environment(\.dismiss) private var dismiss
@@ -340,7 +455,6 @@ struct CategoryBudgetSettingView: View {
             List {
                 Section {
                     ForEach(Expense.categories, id: \.name) { category in
-                        let budget = budgets.first(where: { $0.category == category.name })
                         CategoryBudgetRow(category: category)
                     }
                 } footer: {

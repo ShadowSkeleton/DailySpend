@@ -4,7 +4,6 @@ import UserNotifications
 
 // MARK: - Main Content View (Entry Point)
 struct ContentView: View {
-    // 这里保留 Query 用于后台同步逻辑
     @Query(sort: \Expense.date, order: .reverse) private var expenses: [Expense]
     
     // AppStorage Settings
@@ -13,16 +12,39 @@ struct ContentView: View {
     @AppStorage("dailyNotify") private var dailyNotify = false
     @AppStorage("notifyTime") private var notifyTime: Double = 0
     
+    // Tab 选中状态管理
+    @State private var selectedTab = 0
     @State private var syncTask: Task<Void, Never>? = nil
     
     let themeColor = Color(red: 0.0, green: 0.78, blue: 0.70)
     let backgroundColor = Color(uiColor: .systemGroupedBackground)
     
     var body: some View {
-        TabView {
+        // 绑定 selection
+        TabView(selection: $selectedTab) {
+            // 1. 首页
             HomeView(themeColor: themeColor)
                 .tabItem { Label(L10n.home, systemImage: "house.fill") }
+                .tag(0)
             
+            // 2. AA 计算器 (直接作为第二个 Tab)
+            NavigationStack {
+                ZStack {
+                    backgroundColor.ignoresSafeArea()
+                    SplitBillView(themeColor: themeColor, goHome: {
+                        // 切换回首页
+                        withAnimation {
+                            selectedTab = 0
+                        }
+                    })
+                }
+            }
+            .tabItem {
+                Label(L10n.isZh ? "AA计算" : "Split", systemImage: "person.2.fill")
+            }
+            .tag(1)
+            
+            // 3. 统计
             NavigationStack {
                 ZStack {
                     backgroundColor.ignoresSafeArea()
@@ -30,7 +52,9 @@ struct ContentView: View {
                 }
             }
             .tabItem { Label(L10n.insights, systemImage: "chart.pie.fill") }
+            .tag(2)
             
+            // 4. 设置
             NavigationStack {
                 ZStack {
                     backgroundColor.ignoresSafeArea()
@@ -38,13 +62,13 @@ struct ContentView: View {
                 }
             }
             .tabItem { Label(L10n.settings, systemImage: "gearshape.fill") }
+            .tag(3)
         }
         .tint(themeColor)
         .onAppear {
             NotificationManager.shared.requestPermission()
             performDebouncedSync()
         }
-        // 同步逻辑
         .onChange(of: expenses) { _, _ in performDebouncedSync() }
         .onChange(of: budgetAmount) { _, _ in performDebouncedSync() }
         .onChange(of: isBudgetEnabled) { _, _ in performDebouncedSync() }
@@ -52,7 +76,6 @@ struct ContentView: View {
         .onChange(of: dailyNotify) { _, _ in updateNotifications() }
     }
     
-    // MARK: - Sync Logic
     var currentMonthTotal: Double {
         let calendar = Calendar.current
         let now = Date()

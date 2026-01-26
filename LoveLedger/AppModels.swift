@@ -46,8 +46,8 @@ enum InsightTab: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .trends: return "Trends"
-        case .activity: return "Activity"
+        case .trends: return L10n.trends
+        case .activity: return L10n.activity
         }
     }
 }
