@@ -51,7 +51,7 @@ git clone https://github.com/yourusername/DailySpend.git
 
 #### 2. Open Project
 
-Open `LoveLedger.xcodeproj` in Xcode.
+Open `DailySpend.xcodeproj` in Xcode.
 
 #### 3. Configure Signing
 

@@ -54,21 +54,21 @@
 		4E0000012FF0000100C0D001 /* LoveLedgerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoveLedgerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E0000112FF0000100C0D001 /* LoveLedgerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoveLedgerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E9118B82EE29C0500B4AC63 /* LoveLedger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoveLedger.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		4ECD1A802EE7ABCA0003A2A6 /* LoveLedgerWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoveLedgerWidgetExtension.entitlements; sourceTree = "<group>"; };
+		4ECD1A802EE7ABCA0003A2A6 /* DailySpendWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DailySpendWidgetExtension.entitlements; sourceTree = "<group>"; };
 		4EE9D1D62EE3925F009C1BE8 /* LoveLedgerWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LoveLedgerWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EE9D1D82EE3925F009C1BE8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		4EE9D1DA2EE3925F009C1BE8 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		4EE9D1EE2EE39260009C1BE8 /* Exceptions for "LoveLedgerWidget" folder in "LoveLedgerWidgetExtension" target */ = {
+		4EE9D1EE2EE39260009C1BE8 /* Exceptions for "DailySpendWidget" folder in "LoveLedgerWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 4EE9D1D52EE3925F009C1BE8 /* LoveLedgerWidgetExtension */;
 		};
-		4EE9D1F12EE3929B009C1BE8 /* Exceptions for "LoveLedger" folder in "LoveLedger" target */ = {
+		4EE9D1F12EE3929B009C1BE8 /* Exceptions for "DailySpend" folder in "LoveLedger" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -78,30 +78,30 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		4E0000022FF0000100C0D001 /* LoveLedgerTests */ = {
+		4E0000022FF0000100C0D001 /* DailySpendTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = LoveLedgerTests;
+			path = DailySpendTests;
 			sourceTree = "<group>";
 		};
-		4E0000122FF0000100C0D001 /* LoveLedgerUITests */ = {
+		4E0000122FF0000100C0D001 /* DailySpendUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = LoveLedgerUITests;
+			path = DailySpendUITests;
 			sourceTree = "<group>";
 		};
-		4E9118BA2EE29C0500B4AC63 /* LoveLedger */ = {
+		4E9118BA2EE29C0500B4AC63 /* DailySpend */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				4EE9D1F12EE3929B009C1BE8 /* Exceptions for "LoveLedger" folder in "LoveLedger" target */,
+				4EE9D1F12EE3929B009C1BE8 /* Exceptions for "DailySpend" folder in "LoveLedger" target */,
 			);
-			path = LoveLedger;
+			path = DailySpend;
 			sourceTree = "<group>";
 		};
-		4EE9D1DC2EE3925F009C1BE8 /* LoveLedgerWidget */ = {
+		4EE9D1DC2EE3925F009C1BE8 /* DailySpendWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				4EE9D1EE2EE39260009C1BE8 /* Exceptions for "LoveLedgerWidget" folder in "LoveLedgerWidgetExtension" target */,
+				4EE9D1EE2EE39260009C1BE8 /* Exceptions for "DailySpendWidget" folder in "LoveLedgerWidgetExtension" target */,
 			);
-			path = LoveLedgerWidget;
+			path = DailySpendWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -143,11 +143,11 @@
 		4E9118AF2EE29C0500B4AC63 = {
 			isa = PBXGroup;
 			children = (
-				4ECD1A802EE7ABCA0003A2A6 /* LoveLedgerWidgetExtension.entitlements */,
-				4E9118BA2EE29C0500B4AC63 /* LoveLedger */,
-				4EE9D1DC2EE3925F009C1BE8 /* LoveLedgerWidget */,
-				4E0000022FF0000100C0D001 /* LoveLedgerTests */,
-				4E0000122FF0000100C0D001 /* LoveLedgerUITests */,
+				4ECD1A802EE7ABCA0003A2A6 /* DailySpendWidgetExtension.entitlements */,
+				4E9118BA2EE29C0500B4AC63 /* DailySpend */,
+				4EE9D1DC2EE3925F009C1BE8 /* DailySpendWidget */,
+				4E0000022FF0000100C0D001 /* DailySpendTests */,
+				4E0000122FF0000100C0D001 /* DailySpendUITests */,
 				4EE9D1D72EE3925F009C1BE8 /* Frameworks */,
 				4E9118B92EE29C0500B4AC63 /* Products */,
 			);
@@ -189,7 +189,7 @@
 				4E0000072FF0000100C0D001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				4E0000022FF0000100C0D001 /* LoveLedgerTests */,
+				4E0000022FF0000100C0D001 /* DailySpendTests */,
 			);
 			name = LoveLedgerTests;
 			packageProductDependencies = (
@@ -211,7 +211,7 @@
 				4E0000172FF0000100C0D001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				4E0000122FF0000100C0D001 /* LoveLedgerUITests */,
+				4E0000122FF0000100C0D001 /* DailySpendUITests */,
 			);
 			name = LoveLedgerUITests;
 			packageProductDependencies = (
@@ -235,7 +235,7 @@
 				4EE9D1E92EE39260009C1BE8 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				4E9118BA2EE29C0500B4AC63 /* LoveLedger */,
+				4E9118BA2EE29C0500B4AC63 /* DailySpend */,
 			);
 			name = LoveLedger;
 			packageProductDependencies = (
@@ -257,7 +257,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				4EE9D1DC2EE3925F009C1BE8 /* LoveLedgerWidget */,
+				4EE9D1DC2EE3925F009C1BE8 /* DailySpendWidget */,
 			);
 			name = LoveLedgerWidgetExtension;
 			packageProductDependencies = (
@@ -564,13 +564,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = LoveLedger/LoveLedger.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DailySpend/DailySpend.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = LoveLedger/Info.plist;
+				INFOPLIST_FILE = DailySpend/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DailySpend;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -599,13 +599,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = LoveLedger/LoveLedger.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DailySpend/DailySpend.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = LoveLedger/Info.plist;
+				INFOPLIST_FILE = DailySpend/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DailySpend;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -634,12 +634,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = LoveLedgerWidgetExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DailySpendWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = LoveLedgerWidget/Info.plist;
+				INFOPLIST_FILE = DailySpendWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LoveLedgerWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -665,12 +665,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = LoveLedgerWidgetExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DailySpendWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = LoveLedgerWidget/Info.plist;
+				INFOPLIST_FILE = DailySpendWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LoveLedgerWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
