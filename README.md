@@ -1,10 +1,10 @@
 
 # 📱 DailySpend
 
-**Modern. Private. Seamless.**  
-A premium expense tracking experience built with **SwiftUI** and **SwiftData**.
+**Smart bill splitting. Private spending. Effortless tracking.**
+A premium iOS expense manager and **Smart Split Bill** assistant built with **SwiftUI** and **SwiftData**.
 
-DailySpend is a sleek, privacy-focused personal finance manager for iOS. By leveraging the power of SwiftUI and SwiftData, it provides a lightning-fast interface to track spending, manage budgets, and visualize your financial health — with full **iCloud synchronization** across your devices.
+DailySpend is a sleek, privacy-focused personal finance manager for iOS. Its signature **Smart Split Bill** experience makes group meals, trips, and shared purchases easy to settle fairly, then lets you save your share alongside your everyday spending. Track expenses, manage budgets, and understand your financial health with full **iCloud synchronization** across your devices.
 
 ---
 
@@ -12,6 +12,7 @@ DailySpend is a sleek, privacy-focused personal finance manager for iOS. By leve
 
 | Feature | Description |
 |------|------------|
+| 🤝 **Smart Split Bill** | DailySpend’s signature feature: split a total evenly or item by item, share items among the right people, and settle every cent accurately. |
 | ⚡️ **Quick Log** | Record expenses in seconds with a highly optimized input flow. |
 | 🔍 **OCR Scanner** | Scan receipts using the camera to automatically detect total amounts. |
 | 📊 **Smart Budgeting** | Set global monthly targets or specific category-level limits. |
@@ -19,6 +20,17 @@ DailySpend is a sleek, privacy-focused personal finance manager for iOS. By leve
 | 📈 **Rich Insights** | Visual trends, category breakdowns, and a detailed activity calendar. |
 | ☁️ **iCloud Sync** | Your data stays in sync via CloudKit without third-party servers. |
 | 📦 **Data Portability** | Password-encrypted JSON backup/restore and CSV export for external analysis. |
+
+---
+
+## 🤝 Smart Split Bill — the DailySpend difference
+
+Most expense trackers stop at logging a purchase. DailySpend helps you settle it first.
+
+- **Choose the right split:** divide a total evenly in seconds, or itemize a receipt and assign each item to the people who shared it.
+- **Handle the real bill:** add tax and a percentage or fixed tip; DailySpend calculates each person’s fair total.
+- **No lost pennies:** cent-accurate allocation ensures every share reconciles exactly with the original bill.
+- **Make the result useful:** review a clear per-person breakdown, share the finished receipt, and save the relevant share as an expense.
 
 ---
 
