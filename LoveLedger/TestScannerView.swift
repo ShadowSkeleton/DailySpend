@@ -3,6 +3,7 @@ import SwiftUI
 struct TestScannerView: View {
     @State private var detectedAmount: Double?
     @State private var showScanner = false
+    @State private var scanErrorMessage: String?
     @State private var logs: String = "准备就绪，等待扫描..."
     
     var body: some View {
@@ -59,11 +60,16 @@ struct TestScannerView: View {
             .padding(.horizontal)
         }
         .sheet(isPresented: $showScanner) {
-            ReceiptScannerView(scannedAmount: $detectedAmount)
+            ReceiptScannerView(
+                scannedAmount: $detectedAmount,
+                scanErrorMessage: $scanErrorMessage
+            )
                 .ignoresSafeArea()
                 .onDisappear {
                     if let amount = detectedAmount {
                         logs = "✅ 扫描完成\n识别金额: \(amount)\n(请查看 Xcode 控制台获取详细算法日志)"
+                    } else if let scanErrorMessage {
+                        logs = "⚠️ \(scanErrorMessage)"
                     } else {
                         logs = "⚠️ 扫描取消或未识别到金额"
                     }

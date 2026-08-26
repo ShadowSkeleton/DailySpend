@@ -7,8 +7,17 @@ enum SplitMode: String, CaseIterable {
     
     var title: String {
         switch self {
-        case .evenly: return L10n.isZh ? "平摊" : "Evenly"
-        case .byPerson: return L10n.isZh ? "按人" : "By Person"
+        case .evenly: return L10n.isZh ? "快速平分" : "Quick Split"
+        case .byPerson: return L10n.isZh ? "按项分账" : "By Item"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .evenly:
+            return L10n.isZh ? "输入总额，系统会将每一分钱公平分配。" : "Enter one total and keep every cent accounted for."
+        case .byPerson:
+            return L10n.isZh ? "按项目和参与者分配，再一键记录。" : "Assign items to people, then record each share."
         }
     }
 }
@@ -16,85 +25,63 @@ enum SplitMode: String, CaseIterable {
 struct SplitBillView: View {
     var themeColor: Color
     var goHome: (() -> Void)?
+    @Environment(\.displayScale) private var displayScale
     
     @State private var splitMode: SplitMode = .evenly
     
-    // Shared State for "Record My Share"
-    @State private var showAddExpense = false
-    @State private var pendingRecordAmount: Double = 0
-    @State private var pendingRecordNote: String = ""
-    
     // Image Generation & Sharing State
-    @State private var generatedReceiptImage: UIImage?
-    @State private var showShareSheet = false
+    @State private var shareReceipt: ShareReceipt?
     @State private var isGeneratingImage = false
-    @State private var showClearDataAlert = false
+    @State private var showShareError = false
+    @State private var shareErrorMessage = ""
+    @State private var showNewSplitConfirmation = false
     
     // Communication with Children
     @State private var currentReceiptData: ReceiptData?
     @State private var triggerReset: Bool = false
     
-    // State to force receipt rendering
-    // CRITICAL for fixing the black screen issue
-    @State private var renderID = UUID()
-    
     var body: some View {
         NavigationStack {
-            ZStack {
-                // 1. Hidden Receipt View for rendering
-                // Using opacity 0.01 makes it invisible to user but "visible" to system rendering
-                // renderID forces it to refresh before we capture it
-                if let data = currentReceiptData {
-                    ReceiptView(data: data)
-                        .frame(width: 375)
-                        .background(Color.white)
-                        .environment(\.colorScheme, .light) // Always render in Light mode
-                        .environment(\.displayScale, UIScreen.main.scale) // Ensure correct scale
-                        .opacity(0.01)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                        .id(renderID)
-                }
-                
-                // 2. Main Content
-                VStack(spacing: 0) {
-                    // Mode Picker
-                    Picker("Split Mode", selection: $splitMode) {
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker(L10n.isZh ? "分账方式" : "Split method", selection: $splitMode) {
                         ForEach(SplitMode.allCases, id: \.self) { mode in
                             Text(mode.title).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.top, 10)
-                    .padding(.bottom, 10)
-                    
-                    // Content Switcher
-                    Group {
-                        if splitMode == .evenly {
-                            SplitBillEvenlyView(
-                                themeColor: themeColor,
-                                resetTrigger: $triggerReset,
-                                onFinish: goHome, // Evenly view uses onFinish to navigate home
-                                onUpdateReceiptData: { data in currentReceiptData = data },
-                                onRequestShare: generateAndShareImage
-                            )
-                        } else {
-                            SplitBillBasketView(
-                                themeColor: themeColor,
-                                resetTrigger: $triggerReset,
-                                // Basket view handles its own recording internally via the sheet,
-                                // so we don't need to pass onRecord unless we want the parent to handle it.
-                                // If your BasketView definition has onRecord, pass it.
-                                // Based on previous file, it DOES have onRecord.
-                                onRecord: triggerRecord,
-                                onUpdateReceiptData: { data in currentReceiptData = data },
-                                onRequestShare: generateAndShareImage
-                            )
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("split-mode-picker")
+
+                    Text(splitMode.explanation)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("split-mode-explanation")
                 }
+                .padding(.horizontal)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
+
+                Group {
+                    if splitMode == .evenly {
+                        SplitBillEvenlyView(
+                            themeColor: themeColor,
+                            resetTrigger: $triggerReset,
+                            onFinish: goHome,
+                            onUpdateReceiptData: { data in currentReceiptData = data },
+                            onRequestShare: generateAndShareImage,
+                            isPreparingShare: isGeneratingImage
+                        )
+                    } else {
+                        SplitBillBasketView(
+                            themeColor: themeColor,
+                            resetTrigger: $triggerReset,
+                            onUpdateReceiptData: { data in currentReceiptData = data },
+                            onRequestShare: generateAndShareImage,
+                            isPreparingShare: isGeneratingImage
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationTitle(L10n.isZh ? "分账助手" : "Split Bill")
             .navigationBarTitleDisplayMode(.inline)
@@ -103,57 +90,51 @@ struct SplitBillView: View {
             .toolbar {
                 // Clear Form Button (Trash Icon)
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: { showClearDataAlert = true }) {
+                    Button(action: { showNewSplitConfirmation = true }) {
                         Image(systemName: "trash")
                             .foregroundStyle(.red)
                     }
+                    .accessibilityLabel(L10n.isZh ? "开始新的一单" : "Start a new split")
                 }
             }
             
-            // Sheets
-            .sheet(isPresented: $showAddExpense) {
-                AddExpenseView(
-                    themeColor: themeColor,
-                    prefilledAmount: pendingRecordAmount,
-                    prefilledNote: pendingRecordNote,
-                    prefilledCategory: "Food",
-                    onSave: {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { goHome?() }
-                    }
-                )
-                .id(UUID())
-            }
-            .sheet(isPresented: $showShareSheet) {
-                if let image = generatedReceiptImage {
-                    ShareSheet(items: [image]) { completed in
-                        if completed {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                showClearDataAlert = true
-                            }
-                        }
+            .sheet(item: $shareReceipt) { receipt in
+                ShareSheet(items: [receipt.image]) { completed in
+                    guard completed else { return }
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        showNewSplitConfirmation = true
                     }
                 }
             }
             // Clear Data Confirmation
-            .alert(L10n.isZh ? "导出成功" : "Receipt Shared", isPresented: $showClearDataAlert) {
+            .alert(L10n.isZh ? "开始新的一单？" : "Start a New Split?", isPresented: $showNewSplitConfirmation) {
                 Button(L10n.isZh ? "保留数据" : "Keep Data", role: .cancel) { }
                 Button(L10n.isZh ? "清空表单" : "Clear Form", role: .destructive) {
                     triggerReset = true
                 }
             } message: {
-                Text(L10n.isZh ? "是否要清空当前分账数据并开始新的一单？" : "Would you like to clear the current form and start a new bill?")
+                Text(L10n.isZh ? "当前分账会保留，除非你确认清空表单。" : "Your current split stays intact unless you choose Clear Form.")
             }
-        }
-    }
-    
-    // MARK: - Actions
-    
-    func triggerRecord(amount: Double, note: String) {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            self.pendingRecordAmount = amount
-            self.pendingRecordNote = note
-            self.showAddExpense = true
+            .alert("Couldn’t Prepare Receipt", isPresented: $showShareError) {
+                Button(L10n.ok, role: .cancel) { }
+            } message: {
+                Text(shareErrorMessage)
+            }
+            .overlay {
+                if isGeneratingImage {
+                    VStack(spacing: 10) {
+                        ProgressView()
+                        Text(L10n.isZh ? "正在准备收据…" : "Preparing receipt…")
+                            .font(.footnote.weight(.medium))
+                    }
+                    .padding(20)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(L10n.isZh ? "正在准备分账收据" : "Preparing split receipt")
+                }
+            }
         }
     }
     
@@ -161,51 +142,43 @@ struct SplitBillView: View {
     
     @MainActor
     private func generateAndShareImage() {
-        // 1. Dismiss Keyboard to ensure clean screenshot
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        
         guard !isGeneratingImage, let data = currentReceiptData else { return }
         isGeneratingImage = true
-        
-        // CRITICAL: Force the hidden receipt view to refresh its identity
-        renderID = UUID()
-        
-        // 2. Render on Main Actor with retry logic
+
         Task { @MainActor in
-            // Wait for layout to settle
-            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2s
-            
-            // Create a dedicated rendering view instance
+            await Task.yield()
+
             let receiptView = ReceiptView(data: data)
                 .frame(width: 375)
                 .background(Color.white)
                 .environment(\.colorScheme, .light)
-                .environment(\.displayScale, UIScreen.main.scale)
+                .environment(\.displayScale, displayScale)
             
             let renderer = ImageRenderer(content: receiptView)
             
-            // Explicitly set scale and size
-            renderer.scale = UIScreen.main.scale
+            renderer.scale = displayScale
             renderer.proposedSize = ProposedViewSize(width: 375, height: nil)
-            
-            // Retry Mechanism: Try up to 3 times to get a valid image
-            for _ in 0..<3 {
-                if let image = renderer.uiImage {
-                    self.generatedReceiptImage = image
-                    self.showShareSheet = true
-                    break
-                }
-                // Small delay before retry
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            renderer.isOpaque = true
+
+            if let image = renderer.uiImage,
+               image.size.width > 0,
+               image.size.height > 0 {
+                shareReceipt = ShareReceipt(image: image)
+            } else {
+                shareErrorMessage = L10n.isZh
+                    ? "无法生成收据图片。请稍后重试。"
+                    : "The receipt image couldn’t be generated. Please try again."
+                showShareError = true
             }
-            
-            if self.generatedReceiptImage == nil {
-                print("Error: ImageRenderer failed after retries")
-            }
-            
-            self.isGeneratingImage = false
+
+            isGeneratingImage = false
         }
     }
+}
+
+private struct ShareReceipt: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
 
 // MARK: - Receipt View (Enhanced for Groups)
@@ -221,7 +194,7 @@ struct ReceiptView: View {
                     .foregroundStyle(.black)
                     .padding(.bottom, 8)
                 
-                Text("LoveLedger")
+                Text("DailySpend")
                     .font(.system(.title2, design: .serif))
                     .fontWeight(.bold)
                     .tracking(1)

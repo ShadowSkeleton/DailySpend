@@ -1,5 +1,5 @@
 
-# 📱 DailySpend (LoveLedger)
+# 📱 DailySpend
 
 **Modern. Private. Seamless.**  
 A premium expense tracking experience built with **SwiftUI** and **SwiftData**.
@@ -18,7 +18,7 @@ DailySpend is a sleek, privacy-focused personal finance manager for iOS. By leve
 | 🔁 **Recurring** | Support for Daily, Weekly, Monthly, and Yearly automated entries. |
 | 📈 **Rich Insights** | Visual trends, category breakdowns, and a detailed activity calendar. |
 | ☁️ **iCloud Sync** | Your data stays in sync via CloudKit without third-party servers. |
-| 📦 **Data Portability** | Full JSON backup/restore and CSV export for external analysis. |
+| 📦 **Data Portability** | Password-encrypted JSON backup/restore and CSV export for external analysis. |
 
 ---
 
@@ -57,9 +57,9 @@ Open `LoveLedger.xcodeproj` in Xcode.
 
 Select your **Development Team** in the **Signing & Capabilities** tab.
 
-#### 4. iCloud Setup (Optional)
+#### 4. iCloud Setup
 
-Enable the **iCloud** capability and ensure your **CloudKit container** is correctly assigned.
+For a signed distributed build, enable the **iCloud** capability and ensure the private CloudKit container is correctly assigned.
 
 #### 5. Run
 
@@ -85,14 +85,8 @@ DailySpend is designed with **zero-tracking** in mind.
 * **Local-First:** Data lives on your device
 * **Apple-Secure:** Syncing uses your private iCloud storage
 * **No Third Parties:** No external analytics or trackers included
+* **Encrypted Backups:** New JSON backups use a passphrase that DailySpend never stores
 
----
+The in-app policy is also mirrored in [`docs/privacy/index.html`](docs/privacy/index.html) for App Store hosting.
 
-## 📄 License
-
-This project is licensed under the **MIT License**.
-See the `LICENSE` file for full details.
-
----
-
-Created with ❤️ by **Jackson**
+Created with ❤️ by **Jackson Feng**

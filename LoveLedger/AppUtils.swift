@@ -1,4 +1,19 @@
 import SwiftUI
+import SwiftData
+
+struct KeyboardDismissButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "keyboard.chevron.compact.down")
+                .font(.body.weight(.semibold))
+        }
+        .accessibilityLabel(L10n.isZh ? "收起键盘" : "Hide keyboard")
+        .accessibilityHint(L10n.isZh ? "关闭数字键盘" : "Dismiss the numeric keyboard")
+        .accessibilityIdentifier("keyboard-dismiss")
+    }
+}
 import WidgetKit
 import UserNotifications
 
@@ -30,6 +45,43 @@ struct RecurrenceEngine {
         }
         return nil
     }
+
+    /// Finds the latest scheduled occurrence without generating any historic
+    /// records. It is used only when importing an older backup format that did
+    /// not record recurrence ownership or processing state.
+    static func mostRecentScheduledDate(initialDate: Date, frequency: RecurrenceFrequency, noLaterThan referenceDate: Date) -> Date? {
+        guard frequency != .none, initialDate <= referenceDate else { return nil }
+
+        let calendar = Calendar.current
+        let offset: Int
+        let component: Calendar.Component
+
+        switch frequency {
+        case .none:
+            return nil
+        case .daily:
+            offset = calendar.dateComponents([.day], from: initialDate, to: referenceDate).day ?? 0
+            component = .day
+        case .weekly:
+            let days = calendar.dateComponents([.day], from: initialDate, to: referenceDate).day ?? 0
+            offset = max(0, days / 7)
+            component = .weekOfYear
+        case .monthly:
+            offset = max(0, calendar.dateComponents([.month], from: initialDate, to: referenceDate).month ?? 0)
+            component = .month
+        case .yearly:
+            offset = max(0, calendar.dateComponents([.year], from: initialDate, to: referenceDate).year ?? 0)
+            component = .year
+        }
+
+        guard var candidate = calendar.date(byAdding: component, value: offset, to: initialDate) else {
+            return initialDate
+        }
+        if candidate > referenceDate {
+            candidate = calendar.date(byAdding: component, value: -1, to: candidate) ?? initialDate
+        }
+        return candidate
+    }
 }
 
 // MARK: - Widget Data Service
@@ -38,20 +90,32 @@ struct WidgetDataService {
     static func saveToWidget(expenses: [Expense], budget: Double, isBudgetEnabled: Bool) {
         let calendar = Calendar.current
         let now = Date()
-        let currentMonthTotal = expenses
-            .filter { calendar.isDate($0.date, equalTo: now, toGranularity: .month) }
-            .reduce(0) { $0 + $1.amount }
-        var chartData: [Double] = []
-        for i in (0..<7).reversed() {
-            if let date = calendar.date(byAdding: .day, value: -i, to: now) {
-                let dailyTotal = expenses
-                    .filter { calendar.isDate($0.date, inSameDayAs: date) }
-                    .reduce(0) { $0 + $1.amount }
-                chartData.append(dailyTotal)
+        let today = calendar.startOfDay(for: now)
+        let firstChartDay = calendar.date(byAdding: .day, value: -6, to: today) ?? today
+        var currentMonthTotal = Money.zero
+        var totalsByDay: [Date: Money] = [:]
+
+        // Build every value in one pass. The Home screen may contain years of
+        // records, and widgets should not repeatedly rescan that full list.
+        for expense in expenses {
+            let amount = expense.money
+            if calendar.isDate(expense.date, equalTo: now, toGranularity: .month) {
+                currentMonthTotal = currentMonthTotal + amount
+            }
+
+            let day = calendar.startOfDay(for: expense.date)
+            if day >= firstChartDay && day <= today {
+                totalsByDay[day, default: .zero] = totalsByDay[day, default: .zero] + amount
             }
         }
+
+        let chartData = (0..<7).map { offset in
+            let day = calendar.date(byAdding: .day, value: offset, to: firstChartDay) ?? firstChartDay
+            return totalsByDay[day, default: .zero].amount
+        }
+
         if let store = UserDefaults(suiteName: appGroup) {
-            store.set(currentMonthTotal, forKey: "widget_total")
+            store.set(currentMonthTotal.amount, forKey: "widget_total")
             store.set(budget, forKey: "widget_budget")
             store.set(isBudgetEnabled, forKey: "widget_isBudgetEnabled")
             store.set(chartData, forKey: "widget_chartData")
@@ -69,7 +133,9 @@ struct L10n {
     }
     
     static var currencyCode: String { Locale.current.currency?.identifier ?? "USD" }
-    static var currencySymbol: String { currencyCode == "CNY" ? "¥" : "$" }
+    static var currencySymbol: String {
+        Locale.current.currencySymbol ?? Locale(identifier: "en_US").currencySymbol ?? "$"
+    }
     
     // Core
     static var home: String { isZh ? "首页" : "Home" }
@@ -77,9 +143,9 @@ struct L10n {
     static var settings: String { isZh ? "设置" : "Settings" }
     
     // Dashboard
-    static var thisMonth: String { isZh ? "本月支出" : "THIS MONTH" }
-    static var remaining: String { isZh ? "本月剩余" : "REMAINING" }
-    static var overBudget: String { isZh ? "已超支" : "OVER BUDGET" }
+    static var thisMonth: String { isZh ? "本月支出" : "This Month" }
+    static var remaining: String { isZh ? "本月剩余" : "Remaining" }
+    static var overBudget: String { isZh ? "已超支" : "Over Budget" }
     static var budget: String { isZh ? "预算" : "Budget" }
     static var recentTransactions: String { isZh ? "最近记录" : "Recent Transactions" }
     static var noExpensesTitle: String { isZh ? "暂无账单" : "No Expenses Yet" }
@@ -88,8 +154,8 @@ struct L10n {
     // Editor
     static var newExpense: String { isZh ? "记一笔" : "New Expense" }
     static var editExpense: String { isZh ? "编辑账单" : "Edit Expense" }
-    static var amount: String { isZh ? "金额" : "AMOUNT" }
-    static var category: String { isZh ? "分类" : "CATEGORY" }
+    static var amount: String { isZh ? "金额" : "Amount" }
+    static var category: String { isZh ? "分类" : "Category" }
     static var date: String { isZh ? "日期" : "Date" }
     static var notePlaceholder: String { isZh ? "备注..." : "Add a note..." }
     static var save: String { isZh ? "保存" : "Save" }
@@ -150,7 +216,7 @@ struct L10n {
     
     // iCloud
     static var iCloudStatus: String { isZh ? "iCloud 状态" : "iCloud Status" }
-    static var iCloudAvailable: String { isZh ? "已连接 (自动同步中)" : "Signed In (Auto Sync)" }
+    static var iCloudAvailable: String { isZh ? "已登录 iCloud" : "Signed in to iCloud" }
     static var iCloudUnavailable: String { isZh ? "未连接 (请检查设置)" : "Signed Out (Check Settings)" }
     static var iCloudRestricted: String { isZh ? "受限" : "Restricted" }
     static var iCloudVerifying: String { isZh ? "正在检查..." : "Verifying..." }
@@ -186,14 +252,23 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     override init() { super.init(); UNUserNotificationCenter.current().delegate = self }
     func requestPermission() { UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in } }
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) { completionHandler([.banner, .sound, .list]) }
-    func scheduleDailyNotification(remaining: Double, time: Date, isEnabled: Bool) {
-        let center = UNUserNotificationCenter.current(); center.removePendingNotificationRequests(withIdentifiers: ["dailyBudget"])
+    func cancelDailyNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["dailyBudget"])
+    }
+
+    func scheduleDailyNotification(remaining: Double, alertThreshold: Double, time: Date, isEnabled: Bool) {
+        let center = UNUserNotificationCenter.current(); cancelDailyNotification()
         guard isEnabled else { return }
         let content = UNMutableNotificationContent(); content.title = "DailySpend"
         if remaining < 0 {
             let over = abs(remaining)
             let overText = L10n.isZh ? "已超支" : "Over budget by"
             content.body = "📅 \(overText) \(over.formatted(.currency(code: L10n.currencyCode)))"
+        } else if alertThreshold > 0 && remaining <= alertThreshold {
+            let thresholdText = alertThreshold.formatted(.currency(code: L10n.currencyCode))
+            content.body = L10n.isZh
+                ? "📅 本月仅剩 \(remaining.formatted(.currency(code: L10n.currencyCode)))，低于你的 \(thresholdText) 提醒阈值。"
+                : "📅 Only \(remaining.formatted(.currency(code: L10n.currencyCode))) remains, below your \(thresholdText) alert threshold."
         } else { content.body = "\(L10n.dailyMessage) \(remaining.formatted(.currency(code: L10n.currencyCode))) \(L10n.remainingSuffix)" }
         content.sound = .default
         let components = Calendar.current.dateComponents([.hour, .minute], from: time)
@@ -216,3 +291,73 @@ extension Date {
         return range.compactMap { day -> Date in return calendar.date(byAdding: .day, value: day - 1, to: start)! }
     }
 }
+
+// MARK: - Debug-only sample data
+// This is deliberately compiled out of Release builds. It is opt-in at launch,
+// writes only into an empty store, and never changes the persistent schema.
+#if DEBUG
+enum DebugSampleData {
+    static let launchArgument = "-seed-demo-data"
+
+    @MainActor
+    static func seedWhenRequested(in container: ModelContainer) {
+        guard ProcessInfo.processInfo.arguments.contains(launchArgument) else { return }
+
+        let context = container.mainContext
+        let existingExpenses = (try? context.fetchCount(FetchDescriptor<Expense>())) ?? 1
+        guard existingExpenses == 0 else { return }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let sampleExpenses: [(daysAgo: Int, amount: Double, category: String, note: String)] = [
+            (0, 4.80, "Food", "[Demo] Coffee at Atlas"),
+            (1, 18.60, "Transport", "[Demo] Subway and bus"),
+            (1, 42.15, "Grocery", "[Demo] Weeknight groceries"),
+            (2, 16.40, "Food", "[Demo] Lunch with Morgan"),
+            (3, 12.99, "Entertainment", "[Demo] Movie rental"),
+            (4, 36.72, "Shopping", "[Demo] Running supplies"),
+            (5, 9.50, "Food", "[Demo] Bakery"),
+            (6, 25.00, "Health", "[Demo] Pharmacy"),
+            (8, 58.40, "Utilities", "[Demo] Mobile plan"),
+            (10, 31.85, "Grocery", "[Demo] Farmers market"),
+            (13, 72.00, "Housing", "[Demo] Home supplies"),
+            (18, 21.30, "Food", "[Demo] Dinner with friends"),
+            (24, 14.25, "Transport", "[Demo] Ride share"),
+            (31, 68.45, "Grocery", "[Demo] Monthly staples"),
+            (38, 54.00, "Entertainment", "[Demo] Concert tickets"),
+            (47, 22.75, "Food", "[Demo] Sunday brunch"),
+            (62, 110.00, "Utilities", "[Demo] Electric bill"),
+            (75, 39.90, "Shopping", "[Demo] Gift for a friend")
+        ]
+
+        for sample in sampleExpenses {
+            let date = calendar.date(byAdding: .day, value: -sample.daysAgo, to: now) ?? now
+            context.insert(Expense(
+                amount: sample.amount,
+                category: sample.category,
+                note: sample.note,
+                date: date
+            ))
+        }
+
+        let existingBudgets = (try? context.fetchCount(FetchDescriptor<CategoryBudget>())) ?? 1
+        if existingBudgets == 0 {
+            [
+                CategoryBudget(category: "Food", amount: 180),
+                CategoryBudget(category: "Grocery", amount: 180),
+                CategoryBudget(category: "Transport", amount: 100),
+                CategoryBudget(category: "Entertainment", amount: 80)
+            ].forEach(context.insert)
+        }
+
+        do {
+            try context.save()
+            UserDefaults.standard.set(true, forKey: "isBudgetEnabled")
+            UserDefaults.standard.set(650.0, forKey: "budgetAmount")
+            UserDefaults.standard.set(120.0, forKey: "alertThreshold")
+        } catch {
+            assertionFailure("Could not seed DailySpend debug data: \(error.localizedDescription)")
+        }
+    }
+}
+#endif

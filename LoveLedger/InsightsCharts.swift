@@ -54,7 +54,7 @@ struct SpendingTrendChart: View {
         if let first = sortedKeys.first, let last = sortedKeys.last {
             var current = first
             while current <= last {
-                let total = grouped[current]?.reduce(0) { $0 + $1.amount } ?? 0
+                let total = grouped[current]?.reduce(0) { $0 + $1.normalizedAmount } ?? 0
                 points.append(TrendPoint(date: current, amount: total))
                 if let next = calendar.date(byAdding: granularity, value: 1, to: current) {
                     current = next
@@ -137,6 +137,12 @@ struct SpendingTrendChart: View {
                     }
                 }
                 .chartYAxis { AxisMarks(position: .leading) { _ in AxisGridLine().foregroundStyle(Color.gray.opacity(0.1)); AxisValueLabel() } }
+                .accessibilityLabel(L10n.isZh
+                    ? "\(dateLabel)消费趋势，共 \(trendData.count) 个数据点"
+                    : "Spending trend for \(dateLabel), \(trendData.count) data points")
+                .accessibilityHint(L10n.isZh
+                    ? "拖动图表以查看每个日期的消费金额。"
+                    : "Drag across the chart to inspect spending for each date.")
             }
         }
         .padding(24)
@@ -165,12 +171,12 @@ struct InteractivePieChart: View {
     let themeColor: Color
     let cardBackground: Color
 
-    var totalAmount: Double { expenses.reduce(0) { $0 + $1.amount } }
+    var totalAmount: Double { expenses.reduce(0) { $0 + $1.normalizedAmount } }
 
     var categoryStats: [(name: String, displayName: String, total: Double, color: Color)] {
         let grouped = Dictionary(grouping: expenses, by: { $0.category })
         return grouped.map { (key, value) in
-            let total = value.reduce(0) { $0 + $1.amount }
+            let total = value.reduce(0) { $0 + $1.normalizedAmount }
             let color = Expense.categories.first(where: { $0.name == key })?.color ?? .gray
             return (key, L10n.categoryName(key), total, color)
         }.sorted {
@@ -238,6 +244,18 @@ struct InteractivePieChart: View {
                             }
                     }
                 }
+                .accessibilityLabel(selectedCategoryName.flatMap { selectedName in
+                    categoryStats.first(where: { $0.name == selectedName })
+                }.map { item in
+                    L10n.isZh
+                        ? "消费构成，已选择\(item.displayName)，\(item.total.formatted(.currency(code: L10n.currencyCode)))"
+                        : "Spending breakdown, selected \(item.displayName), \(item.total.formatted(.currency(code: L10n.currencyCode)))"
+                } ?? (L10n.isZh
+                    ? "消费构成，总计\(totalAmount.formatted(.currency(code: L10n.currencyCode)))"
+                    : "Spending breakdown, total \(totalAmount.formatted(.currency(code: L10n.currencyCode)))"))
+                .accessibilityHint(L10n.isZh
+                    ? "轻点图表中的分类以查看金额。"
+                    : "Tap a category in the chart to view its amount.")
 
                 VStack(spacing: 4) {
                     if let selectedName = selectedCategoryName,

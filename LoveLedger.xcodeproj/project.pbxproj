@@ -13,6 +13,20 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		4E0000062FF0000100C0D001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4E9118B02EE29C0500B4AC63 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4E9118B72EE29C0500B4AC63;
+			remoteInfo = LoveLedger;
+		};
+		4E0000162FF0000100C0D001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4E9118B02EE29C0500B4AC63 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4E9118B72EE29C0500B4AC63;
+			remoteInfo = LoveLedger;
+		};
 		4EE9D1E82EE39260009C1BE8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4E9118B02EE29C0500B4AC63 /* Project object */;
@@ -37,6 +51,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		4E0000012FF0000100C0D001 /* LoveLedgerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoveLedgerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4E0000112FF0000100C0D001 /* LoveLedgerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoveLedgerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E9118B82EE29C0500B4AC63 /* LoveLedger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoveLedger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4ECD1A802EE7ABCA0003A2A6 /* LoveLedgerWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoveLedgerWidgetExtension.entitlements; sourceTree = "<group>"; };
 		4EE9D1D62EE3925F009C1BE8 /* LoveLedgerWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LoveLedgerWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -62,6 +78,16 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		4E0000022FF0000100C0D001 /* LoveLedgerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LoveLedgerTests;
+			sourceTree = "<group>";
+		};
+		4E0000122FF0000100C0D001 /* LoveLedgerUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LoveLedgerUITests;
+			sourceTree = "<group>";
+		};
 		4E9118BA2EE29C0500B4AC63 /* LoveLedger */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -81,6 +107,20 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		4E0000032FF0000100C0D001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4E0000132FF0000100C0D001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4E9118B52EE29C0500B4AC63 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -106,6 +146,8 @@
 				4ECD1A802EE7ABCA0003A2A6 /* LoveLedgerWidgetExtension.entitlements */,
 				4E9118BA2EE29C0500B4AC63 /* LoveLedger */,
 				4EE9D1DC2EE3925F009C1BE8 /* LoveLedgerWidget */,
+				4E0000022FF0000100C0D001 /* LoveLedgerTests */,
+				4E0000122FF0000100C0D001 /* LoveLedgerUITests */,
 				4EE9D1D72EE3925F009C1BE8 /* Frameworks */,
 				4E9118B92EE29C0500B4AC63 /* Products */,
 			);
@@ -116,6 +158,8 @@
 			children = (
 				4E9118B82EE29C0500B4AC63 /* LoveLedger.app */,
 				4EE9D1D62EE3925F009C1BE8 /* LoveLedgerWidgetExtension.appex */,
+				4E0000012FF0000100C0D001 /* LoveLedgerTests.xctest */,
+				4E0000112FF0000100C0D001 /* LoveLedgerUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -132,6 +176,50 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		4E0000052FF0000100C0D001 /* LoveLedgerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4E00000A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "LoveLedgerTests" */;
+			buildPhases = (
+				4E0000042FF0000100C0D001 /* Sources */,
+				4E0000032FF0000100C0D001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4E0000072FF0000100C0D001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				4E0000022FF0000100C0D001 /* LoveLedgerTests */,
+			);
+			name = LoveLedgerTests;
+			packageProductDependencies = (
+			);
+			productName = LoveLedgerTests;
+			productReference = 4E0000012FF0000100C0D001 /* LoveLedgerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		4E0000152FF0000100C0D001 /* LoveLedgerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4E00001A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "LoveLedgerUITests" */;
+			buildPhases = (
+				4E0000142FF0000100C0D001 /* Sources */,
+				4E0000132FF0000100C0D001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4E0000172FF0000100C0D001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				4E0000122FF0000100C0D001 /* LoveLedgerUITests */,
+			);
+			name = LoveLedgerUITests;
+			packageProductDependencies = (
+			);
+			productName = LoveLedgerUITests;
+			productReference = 4E0000112FF0000100C0D001 /* LoveLedgerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		4E9118B72EE29C0500B4AC63 /* LoveLedger */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4E9118C52EE29C0600B4AC63 /* Build configuration list for PBXNativeTarget "LoveLedger" */;
@@ -188,6 +276,14 @@
 				LastSwiftUpdateCheck = 2610;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					4E0000052FF0000100C0D001 = {
+						CreatedOnToolsVersion = 26.1.1;
+						TestTargetID = 4E9118B72EE29C0500B4AC63;
+					};
+					4E0000152FF0000100C0D001 = {
+						CreatedOnToolsVersion = 26.1.1;
+						TestTargetID = 4E9118B72EE29C0500B4AC63;
+					};
 					4E9118B72EE29C0500B4AC63 = {
 						CreatedOnToolsVersion = 26.1.1;
 					};
@@ -213,6 +309,8 @@
 			targets = (
 				4E9118B72EE29C0500B4AC63 /* LoveLedger */,
 				4EE9D1D52EE3925F009C1BE8 /* LoveLedgerWidgetExtension */,
+				4E0000052FF0000100C0D001 /* LoveLedgerTests */,
+				4E0000152FF0000100C0D001 /* LoveLedgerUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -235,6 +333,20 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		4E0000042FF0000100C0D001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4E0000142FF0000100C0D001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4E9118B42EE29C0500B4AC63 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -252,6 +364,16 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		4E0000072FF0000100C0D001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4E9118B72EE29C0500B4AC63 /* LoveLedger */;
+			targetProxy = 4E0000062FF0000100C0D001 /* PBXContainerItemProxy */;
+		};
+		4E0000172FF0000100C0D001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4E9118B72EE29C0500B4AC63 /* LoveLedger */;
+			targetProxy = 4E0000162FF0000100C0D001 /* PBXContainerItemProxy */;
+		};
 		4EE9D1E92EE39260009C1BE8 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 4EE9D1D52EE3925F009C1BE8 /* LoveLedgerWidgetExtension */;
@@ -260,6 +382,58 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		4E0000082FF0000100C0D001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.LoveLedgerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LoveLedger.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LoveLedger";
+				TEST_TARGET_NAME = LoveLedger;
+			};
+			name = Debug;
+		};
+		4E0000092FF0000100C0D001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.LoveLedgerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LoveLedger.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LoveLedger";
+				TEST_TARGET_NAME = LoveLedger;
+			};
+			name = Release;
+		};
+		4E0000182FF0000100C0D001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.LoveLedgerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = LoveLedger;
+			};
+			name = Debug;
+		};
+		4E0000192FF0000100C0D001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.LoveLedgerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = LoveLedger;
+			};
+			name = Release;
+		};
 		4E9118C32EE29C0600B4AC63 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -314,7 +488,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -374,7 +548,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -392,13 +566,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LoveLedger/LoveLedger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LoveLedger/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DailySpend;
-				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access to scan receipt amounts";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -428,13 +601,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LoveLedger/LoveLedger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LoveLedger/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = DailySpend;
-				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access to scan receipt amounts";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -464,7 +636,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = LoveLedgerWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LoveLedgerWidget/Info.plist;
@@ -495,7 +667,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = LoveLedgerWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LoveLedgerWidget/Info.plist;
@@ -522,6 +694,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		4E00000A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "LoveLedgerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4E0000082FF0000100C0D001 /* Debug */,
+				4E0000092FF0000100C0D001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4E00001A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "LoveLedgerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4E0000182FF0000100C0D001 /* Debug */,
+				4E0000192FF0000100C0D001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		4E9118B32EE29C0500B4AC63 /* Build configuration list for PBXProject "LoveLedger" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

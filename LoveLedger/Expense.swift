@@ -27,17 +27,47 @@ enum RecurrenceFrequency: String, Codable, CaseIterable, Identifiable {
 @Model
 final class CategoryBudget {
     var category: String = ""
+    // Kept optional so existing SwiftData stores can migrate additively. A
+    // missing value is read from the legacy Double until it is backfilled.
+    var amountMinorUnits: Int64? = nil
     var amount: Double = 0.0
     
-    init(category: String, amount: Double) {
+    init(category: String, amount: Double, amountMinorUnits: Int64? = nil) {
+        let money = amountMinorUnits.map(Money.init(minorUnits:)) ?? Money(amount)
         self.category = category
-        self.amount = amount
+        self.amount = money.amount
+        self.amountMinorUnits = money.minorUnits
+    }
+
+    var money: Money {
+        amountMinorUnits.map(Money.init(minorUnits:)) ?? Money(amount)
+    }
+
+    var normalizedAmount: Double { money.amount }
+
+    func setAmount(_ newAmount: Double) {
+        let money = Money(newAmount)
+        amount = money.amount
+        amountMinorUnits = money.minorUnits
+    }
+
+    func setMoney(_ money: Money) {
+        amount = money.amount
+        amountMinorUnits = money.minorUnits
+    }
+
+    func backfillMinorUnitsIfNeeded() {
+        guard amountMinorUnits == nil else { return }
+        amountMinorUnits = Money(amount).minorUnits
     }
 }
 
 @Model
 final class Expense {
     var id: UUID = UUID()
+    // This optional field is an additive, crash-safe migration from legacy
+    // Double storage. The old amount remains untouched for recovery.
+    var amountMinorUnits: Int64? = nil
     var amount: Double = 0.0
     var category: String = "Other"
     var note: String = ""
@@ -53,9 +83,11 @@ final class Expense {
     // 作用：让 UI 可以显示 Recurring 图标，但逻辑层知道不要再次处理它
     var isRecurringChild: Bool = false
     
-    init(amount: Double, category: String, note: String, date: Date = Date(), frequency: RecurrenceFrequency = .none, lastProcessedDate: Date? = nil, isRecurringChild: Bool = false) {
-        self.id = UUID()
-        self.amount = amount
+    init(id: UUID = UUID(), amount: Double, amountMinorUnits: Int64? = nil, category: String, note: String, date: Date = Date(), frequency: RecurrenceFrequency = .none, lastProcessedDate: Date? = nil, isRecurringChild: Bool = false) {
+        let money = amountMinorUnits.map(Money.init(minorUnits:)) ?? Money(amount)
+        self.id = id
+        self.amount = money.amount
+        self.amountMinorUnits = money.minorUnits
         self.category = category
         self.note = note
         self.date = date
@@ -66,6 +98,28 @@ final class Expense {
     
     var safeFrequency: RecurrenceFrequency {
         return frequency ?? .none
+    }
+
+    var money: Money {
+        amountMinorUnits.map(Money.init(minorUnits:)) ?? Money(amount)
+    }
+
+    var normalizedAmount: Double { money.amount }
+
+    func setAmount(_ newAmount: Double) {
+        let money = Money(newAmount)
+        amount = money.amount
+        amountMinorUnits = money.minorUnits
+    }
+
+    func setMoney(_ money: Money) {
+        amount = money.amount
+        amountMinorUnits = money.minorUnits
+    }
+
+    func backfillMinorUnitsIfNeeded() {
+        guard amountMinorUnits == nil else { return }
+        amountMinorUnits = Money(amount).minorUnits
     }
     
     // UI 配置

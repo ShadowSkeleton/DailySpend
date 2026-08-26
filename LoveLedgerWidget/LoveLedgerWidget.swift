@@ -116,7 +116,9 @@ struct DashboardWidgetEntryView : View {
     let textSecondary = Color.gray
     let textTertiary = Color.gray.opacity(0.6)
     
-    var currencySymbol: String { Locale.current.currency?.identifier == "CNY" ? "¥" : "$" }
+    var currencySymbol: String {
+        Locale.current.currencySymbol ?? Locale(identifier: "en_US").currencySymbol ?? "$"
+    }
     
     var weekDayLabels: [String] {
         let calendar = Calendar.current

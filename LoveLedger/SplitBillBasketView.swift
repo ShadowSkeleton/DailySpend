@@ -10,16 +10,15 @@ enum SplitBasketFocusField: Hashable {
 struct SplitBillBasketView: View {
     var themeColor: Color
     @Binding var resetTrigger: Bool
-    var onRecord: ((Double, String) -> Void)?
     var onUpdateReceiptData: ((ReceiptData) -> Void)?
     var onRequestShare: (() -> Void)?
+    var isPreparingShare = false
     
     @StateObject private var session = SplitSession()
     
     // UI State
     @State private var editingPersonID: UUID?
     @State private var isSharedSectionExpanded = true
-    @State private var showResetAlert = false
     
     // New Item Input State (Shared)
     @State private var newSharedName = ""
@@ -43,10 +42,13 @@ struct SplitBillBasketView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Color(uiColor: .systemGroupedBackground))
-        .onTapGesture {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                KeyboardDismissButton { focusedField = nil }
+            }
         }
+        .background(Color(uiColor: .systemGroupedBackground))
         // Sheet for recording expense per person
         .sheet(item: $recordingPerson) { person in
             AddExpenseView(
@@ -59,8 +61,8 @@ struct SplitBillBasketView: View {
                 }
             )
         }
-        .onChange(of: resetTrigger) { newValue in
-            if newValue {
+        .onChange(of: resetTrigger) { _, shouldReset in
+            if shouldReset {
                 withAnimation {
                     session.reset()
                     updateReceipt()
@@ -85,8 +87,13 @@ struct SplitBillBasketView: View {
                 HStack {
                     Image(systemName: "person.3.sequence.fill")
                         .foregroundStyle(themeColor)
-                    Text(L10n.isZh ? "共享菜品 (全员平分)" : "Shared Items (Split by All)")
-                        .font(.headline).foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.isZh ? "共享项目" : "Shared Items")
+                            .font(.headline).foregroundStyle(.primary)
+                        Text(L10n.isZh ? "选择谁参与分摊每一项" : "Choose who shares each item.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .foregroundStyle(.secondary)
@@ -95,6 +102,8 @@ struct SplitBillBasketView: View {
                 .padding()
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
             }
+            .accessibilityLabel(L10n.isZh ? "共享项目" : "Shared items")
+            .accessibilityHint(L10n.isZh ? "展开后可添加项目并选择参与者" : "Expand to add items and choose participants.")
             
             if isSharedSectionExpanded {
                 Divider()
@@ -132,7 +141,8 @@ struct SplitBillBasketView: View {
                                 .font(.title)
                                 .foregroundStyle(themeColor)
                         }
-                        .disabled(newSharedPrice == nil)
+                        .disabled(newSharedPrice.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? true)
+                        .accessibilityLabel(L10n.isZh ? "添加共享项目" : "Add shared item")
                     }
                     .padding()
                     .background(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.3))
@@ -175,7 +185,9 @@ struct SplitBillBasketView: View {
                     onRecord: {
                         // Directly assign recordingPerson to present the AddExpenseView sheet with fresh data
                         recordingPerson = person
-                    }
+                    },
+                    canDeletePerson: session.canRemovePerson,
+                    canRecord: session.isReadyToSettle
                 )
             }
             
@@ -282,6 +294,14 @@ struct SplitBillBasketView: View {
             }
             
             Divider()
+
+            if let message = session.settlementValidationMessage {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel(message)
+            }
             
             HStack {
                 Text(L10n.isZh ? "总计" : "Grand Total")
@@ -305,13 +325,17 @@ struct SplitBillBasketView: View {
                 Text(L10n.isZh ? "导出收据" : "Share Receipt")
             }
             .font(.headline)
-            .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 56)
-            .background(themeColor)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: themeColor.opacity(0.3), radius: 8, x: 0, y: 4)
         }
+        .buttonStyle(.borderedProminent)
+        .tint(themeColor)
+        .disabled(!session.isReadyToSettle || isPreparingShare)
+        .opacity(session.isReadyToSettle && !isPreparingShare ? 1 : 0.45)
+        .accessibilityLabel(L10n.isZh ? "分享分账收据" : "Share split receipt")
+        .accessibilityHint(isPreparingShare
+            ? (L10n.isZh ? "正在准备收据" : "Preparing receipt")
+            : (session.settlementValidationMessage ?? "Shares the completed receipt."))
         .padding(.horizontal, 24)
         .padding(.bottom, 50)
     }
@@ -319,7 +343,8 @@ struct SplitBillBasketView: View {
     // MARK: - Logic Methods
     
     private func addSharedItem() {
-        guard let price = newSharedPrice else { return }
+        guard let price = newSharedPrice,
+              ExpenseInputValidator.isValidLineItemAmount(price) else { return }
         session.addSharedItem(name: newSharedName, price: price)
         newSharedName = ""
         newSharedPrice = nil
@@ -374,7 +399,7 @@ struct SplitBillBasketView: View {
             tax: session.totalTaxAmount,
             tip: session.totalTipAmount,
             total: session.grandTotal,
-            footer: "Generated by LoveLedger"
+            footer: "Generated by DailySpend"
         )
         onUpdateReceiptData?(data)
     }
@@ -447,6 +472,8 @@ struct PersonBasketCard: View {
     var onRemoveItem: (UUID) -> Void
     var onDeletePerson: () -> Void
     var onRecord: () -> Void
+    var canDeletePerson: Bool
+    var canRecord: Bool
     
     @State private var newItemName = ""
     @State private var newItemPrice: Double?
@@ -562,7 +589,8 @@ struct PersonBasketCard: View {
                         .cornerRadius(6)
                         
                         Button(action: {
-                            if let price = newItemPrice {
+                            if let price = newItemPrice,
+                               ExpenseInputValidator.isValidLineItemAmount(price) {
                                 onAddItem(newItemName, price)
                                 newItemName = ""
                                 newItemPrice = nil
@@ -573,7 +601,7 @@ struct PersonBasketCard: View {
                                 .font(.title2)
                                 .foregroundStyle(themeColor)
                         }
-                        .disabled(newItemPrice == nil)
+                        .disabled(newItemPrice.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? true)
                     }
                     .padding(16)
                     .background(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.3))
@@ -591,6 +619,8 @@ struct PersonBasketCard: View {
                             .padding(8)
                             .background(Color.red.opacity(0.1)).clipShape(Capsule())
                         }
+                        .disabled(!canDeletePerson)
+                        .opacity(canDeletePerson ? 1 : 0.4)
                         
                         Spacer()
                         
@@ -612,6 +642,8 @@ struct PersonBasketCard: View {
                             .foregroundStyle(themeColor)
                             .clipShape(Capsule())
                         }
+                        .disabled(!canRecord)
+                        .opacity(canRecord ? 1 : 0.4)
                     }
                     .padding(12)
                 }
@@ -634,8 +666,7 @@ struct TipCapsule: View {
             Text(text)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(isSelected ? color : Color(uiColor: .tertiarySystemFill))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .clipShape(Capsule())

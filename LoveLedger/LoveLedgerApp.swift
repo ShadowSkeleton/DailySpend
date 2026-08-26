@@ -3,18 +3,95 @@ import SwiftData
 
 @main
 struct LoveLedgerApp: App {
+    static let cloudKitContainerIdentifier = "iCloud.com.jackson.LoveLedger"
+    static let cloudKitStoreFallbackKey = "cloudKitStoreFallback"
+
+    static var isRunningAutomatedTests: Bool {
+        ProcessInfo.processInfo.arguments.contains("-ui-testing") ||
+            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    // UI tests use a temporary store so automated runs never inspect, alter, or
+    // depend on a person's real expense history.
+    private let modelContainer: ModelContainer
+
+    init() {
+        let isRunningTests = Self.isRunningAutomatedTests
+        let configuration = Self.modelConfiguration(isRunningUITests: isRunningTests)
+
+        do {
+            modelContainer = try ModelContainer(
+                for: Expense.self,
+                CategoryBudget.self,
+                configurations: configuration
+            )
+            if !isRunningTests {
+                UserDefaults.standard.set(false, forKey: Self.cloudKitStoreFallbackKey)
+            }
+        } catch {
+            // If CloudKit setup is temporarily unavailable, preserve access to
+            // the exact same local store instead of blocking someone from their
+            // expenses. The next normal launch retries CloudKit automatically.
+            do {
+                let localConfiguration = ModelConfiguration(cloudKitDatabase: .none)
+                modelContainer = try ModelContainer(
+                    for: Expense.self,
+                    CategoryBudget.self,
+                    configurations: localConfiguration
+                )
+                if !isRunningTests {
+                    UserDefaults.standard.set(true, forKey: Self.cloudKitStoreFallbackKey)
+                }
+            } catch {
+                fatalError("Unable to open DailySpend’s local data store: \(error.localizedDescription)")
+            }
+        }
+
+        #if DEBUG
+        DebugSampleData.seedWhenRequested(in: modelContainer)
+        #endif
+
+        // The migration is additive: a failed or interrupted run leaves the
+        // original Double values in place, and the app can still read them.
+        // UI tests start from a temporary empty store and do not need it.
+        if !isRunningTests {
+            let migrationContext = ModelContext(modelContainer)
+            do {
+                _ = try MoneyStoreMigration.backfillMissingMinorUnits(in: migrationContext)
+            } catch {
+                // Keep the app usable with its legacy values. This must never
+                // block a person from opening their expense history.
+                #if DEBUG
+                print("Couldn’t backfill precise money values: \(error.localizedDescription)")
+                #endif
+            }
+        }
+    }
+
+    static func modelConfiguration(isRunningUITests: Bool) -> ModelConfiguration {
+        ModelConfiguration(
+            isStoredInMemoryOnly: isRunningUITests,
+            cloudKitDatabase: isRunningUITests ? .none : .private(Self.cloudKitContainerIdentifier)
+        )
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 // 守门员机制：在 App 最底层处理周期性检查
                 .background(RecurrenceHandler())
         }
-        .modelContainer(for: [Expense.self, CategoryBudget.self])
+        .modelContainer(modelContainer)
     }
 }
 
 struct RecurrenceHandler: View {
     @Environment(\.modelContext) private var modelContext
+
+    // A daily entry left untouched for years should not freeze launch by
+    // attempting to materialize its entire history at once. The next launch
+    // resumes from the saved cursor, so no due occurrence is discarded.
+    private static let maximumGeneratedOccurrencesPerLaunch = 366
     
     // 获取所有账单
     @Query(sort: \Expense.date) var allExpenses: [Expense]
@@ -39,10 +116,12 @@ struct RecurrenceHandler: View {
         if recurringExpenses.isEmpty { return }
         
         var addedCount = 0
+        var reachedCatchUpLimit = false
         
         for expense in recurringExpenses {
             // 2. 追赶机制
-            while let nextDate = RecurrenceEngine.nextDueDate(
+            while addedCount < Self.maximumGeneratedOccurrencesPerLaunch,
+                  let nextDate = RecurrenceEngine.nextDueDate(
                 initialDate: expense.date,
                 lastProcessed: expense.lastProcessedDate,
                 frequency: expense.safeFrequency
@@ -51,7 +130,8 @@ struct RecurrenceHandler: View {
                 
                 // 3. 生成新账单
                 let newExpense = Expense(
-                    amount: expense.amount,
+                    amount: expense.normalizedAmount,
+                    amountMinorUnits: expense.money.minorUnits,
                     category: expense.category,
                     note: expense.note.isEmpty ? "(Auto)" : "\(expense.note) (Auto)",
                     date: nextDate,
@@ -68,12 +148,20 @@ struct RecurrenceHandler: View {
                 expense.lastProcessedDate = nextDate
                 addedCount += 1
             }
+
+            if addedCount >= Self.maximumGeneratedOccurrencesPerLaunch {
+                reachedCatchUpLimit = true
+                break
+            }
         }
         
         if addedCount > 0 {
             do {
                 try modelContext.save()
                 print("✅ Successfully generated \(addedCount) recurring expenses with icons.")
+                if reachedCatchUpLimit {
+                    print("⏳ DailySpend will continue catching up recurring expenses on a future launch.")
+                }
             } catch {
                 print("❌ Failed to save: \(error)")
             }

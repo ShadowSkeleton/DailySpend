@@ -2,8 +2,104 @@ import SwiftUI
 import Vision
 import VisionKit
 
+/// Selects a receipt's payable total from Vision OCR lines.
+///
+/// Vision intentionally stays responsible for reading the receipt. This parser
+/// only ranks the already-recognized lines, so amounts are deterministic,
+/// inspectable, and never sent off-device.
+enum ReceiptAmountParser {
+    struct Line: Equatable {
+        let text: String
+        let boundingBox: CGRect
+    }
+
+    private static let centsPattern = #"(?:[$€£¥]\s*)?((?:\d{1,3}(?:,\d{3})*|\d+)\.\d{2})(?!\d)"#
+    static func bestAmount(from lines: [Line]) -> Double? {
+        let candidates = lines.compactMap { line -> (line: Line, amount: Double, priority: Int)? in
+            guard let amount = currencyAmount(in: line.text) else { return nil }
+            let priority = labelPriority(for: line.text)
+            return (line, amount, priority)
+        }
+
+        // A printed total should always beat a subtotal. When two lines carry
+        // equally good labels, use the lower one on the receipt—the final
+        // payable total conventionally appears after intermediate totals.
+        if let labeledTotal = candidates
+            .filter({ $0.priority > 0 })
+            .max(by: { lhs, rhs in
+                lhs.priority == rhs.priority
+                    ? lhs.line.boundingBox.minY > rhs.line.boundingBox.minY
+                    : lhs.priority < rhs.priority
+            }) {
+            return labeledTotal.amount
+        }
+
+        // Some printers put a label on one line and the currency on the next.
+        // Only use an unlabeled line directly beneath a strong label.
+        let strongLabels = lines
+            .filter { labelPriority(for: $0.text) >= 900 }
+            .sorted { lhs, rhs in
+                if labelPriority(for: lhs.text) != labelPriority(for: rhs.text) {
+                    return labelPriority(for: lhs.text) > labelPriority(for: rhs.text)
+                }
+                return lhs.boundingBox.minY < rhs.boundingBox.minY
+            }
+
+        for label in strongLabels where currencyAmount(in: label.text) == nil {
+            let amountBelowLabel = candidates
+                .filter { candidate in
+                    let verticalDistance = label.boundingBox.minY - candidate.line.boundingBox.maxY
+                    return verticalDistance >= -0.01 && verticalDistance < 0.06
+                }
+                .min(by: { lhs, rhs in
+                    let lhsDistance = label.boundingBox.minY - lhs.line.boundingBox.maxY
+                    let rhsDistance = label.boundingBox.minY - rhs.line.boundingBox.maxY
+                    return lhsDistance < rhsDistance
+                })
+
+            if let amountBelowLabel { return amountBelowLabel.amount }
+        }
+
+        // Last resort for receipts whose labels were not recognized. Exclude
+        // intermediate amounts and prefer the largest price near the bottom.
+        let fallbackCandidates = candidates.filter {
+            $0.priority >= 0 && $0.line.boundingBox.minY < 0.5
+        }
+        return fallbackCandidates.max(by: { $0.amount < $1.amount })?.amount
+    }
+
+    static func currencyAmount(in text: String) -> Double? {
+        let range = NSRange(text.startIndex..., in: text)
+        guard let expression = try? NSRegularExpression(pattern: centsPattern),
+              let match = expression.matches(in: text, range: range).last,
+              let amountRange = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+
+        return Double(text[amountRange].replacingOccurrences(of: ",", with: ""))
+    }
+
+    private static func labelPriority(for text: String) -> Int {
+        let normalized = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        let excludedLabels = ["subtotal", "sub-total", "sales tax", " tax", "tip", "gratuity", "change", "discount", "小计", "税", "服务费"]
+        guard !excludedLabels.contains(where: normalized.contains) else { return -1 }
+
+        let strongLabels = ["grand total", "total due", "total amount", "amount due", "balance due", "payment due", "amount payable", "合计", "总额", "应付", "实付"]
+        if strongLabels.contains(where: normalized.contains) { return 1_000 }
+
+        if normalized.range(of: #"\btotal\b"#, options: .regularExpression) != nil || normalized.contains("总计") {
+            return 900
+        }
+        if normalized.contains("balance") || normalized.contains("amount") || normalized.contains("payment") {
+            return 700
+        }
+        return 0
+    }
+}
+
 struct ReceiptScannerView: UIViewControllerRepresentable {
     @Binding var scannedAmount: Double?
+    @Binding var scanErrorMessage: String?
     @Environment(\.dismiss) var dismiss
     
     func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
@@ -26,9 +122,8 @@ struct ReceiptScannerView: UIViewControllerRepresentable {
         }
         
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-            // 只要有一张图，立刻开始处理，并关闭相机
             guard scan.pageCount >= 1 else {
-                controller.dismiss(animated: true)
+                finish(controller, errorMessage: "No receipt was captured. You can enter the amount manually.")
                 return
             }
             
@@ -41,55 +136,54 @@ struct ReceiptScannerView: UIViewControllerRepresentable {
         }
         
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
-            controller.dismiss(animated: true)
+            finish(
+                controller,
+                errorMessage: "DailySpend couldn’t use the camera. Check Camera access in Settings, then try again."
+            )
         }
         
         // MARK: - 核心 AI 算法
         func processImage(_ image: UIImage, controller: VNDocumentCameraViewController) {
-            guard let cgImage = image.cgImage else { return }
+            guard let cgImage = image.cgImage else {
+                finish(controller, errorMessage: "This receipt image couldn’t be read. You can enter the amount manually.")
+                return
+            }
             
             let request = VNRecognizeTextRequest { [weak self] request, error in
                 guard let self = self else { return }
                 
                 guard let observations = request.results as? [VNRecognizedTextObservation], error == nil else {
-                    DispatchQueue.main.async { controller.dismiss(animated: true) }
+                    self.finish(
+                        controller,
+                        errorMessage: "DailySpend couldn’t read that receipt. You can enter the amount manually."
+                    )
                     return
                 }
                 
-                var potentialPrices: [(value: Double, box: CGRect, text: String)] = []
-                var keyWords: [CGRect] = []
-                
-                // 扩展关键词库 (中英文)
-                let targetWords = ["total", "amount", "balance", "due", "payment", "合计", "总额", "实付", "应付"]
+                var recognizedLines: [ReceiptAmountParser.Line] = []
                 
                 for observation in observations {
                     guard let candidate = observation.topCandidates(1).first else { continue }
-                    let text = candidate.string.lowercased()
-                    let box = observation.boundingBox // 0~1 归一化坐标 (Y轴 0在下，1在上)
-                    
-                    // A. 提取潜在金额
-                    if let value = self.extractCurrency(from: text) {
-                        potentialPrices.append((value, box, text))
-                    }
-                    
-                    // B. 提取关键词位置
-                    for word in targetWords {
-                        if text.contains(word) {
-                            keyWords.append(box)
-                            break
-                        }
-                    }
+                    recognizedLines.append(
+                        ReceiptAmountParser.Line(
+                            text: candidate.string,
+                            boundingBox: observation.boundingBox
+                        )
+                    )
                 }
                 
-                // 2. 智能筛选
-                let bestGuess = self.findBestMatch(prices: potentialPrices, keywords: keyWords)
+                let bestGuess = ReceiptAmountParser.bestAmount(from: recognizedLines)
                 
-                // 3. 返回结果并关闭
-                DispatchQueue.main.async {
-                    if let result = bestGuess {
+                if let result = bestGuess {
+                    DispatchQueue.main.async {
                         self.parent.scannedAmount = result
+                        controller.dismiss(animated: true)
                     }
-                    controller.dismiss(animated: true)
+                } else {
+                    self.finish(
+                        controller,
+                        errorMessage: "No total was found on this receipt. You can enter the amount manually."
+                    )
                 }
             }
             
@@ -100,73 +194,23 @@ struct ReceiptScannerView: UIViewControllerRepresentable {
             
             let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up)
             DispatchQueue.global(qos: .userInitiated).async {
-                try? handler.perform([request])
+                do {
+                    try handler.perform([request])
+                } catch {
+                    self.finish(
+                        controller,
+                        errorMessage: "DailySpend couldn’t process that receipt. You can enter the amount manually."
+                    )
+                }
+            }
+        }
+
+        private func finish(_ controller: VNDocumentCameraViewController, errorMessage: String) {
+            DispatchQueue.main.async {
+                self.parent.scanErrorMessage = errorMessage
+                controller.dismiss(animated: true)
             }
         }
         
-        // MARK: - 算法策略
-        func findBestMatch(prices: [(value: Double, box: CGRect, text: String)], keywords: [CGRect]) -> Double? {
-            guard !prices.isEmpty else { return nil }
-            
-            // 1. 过滤掉不合理的数字 (Auth Code 杀手)
-            let validPrices = prices.filter { priceTuple in
-                let val = priceTuple.value
-                
-                // 规则A: 排除过大的数字 (Auth Code 通常很大，比如 56472)
-                if val > 5000 {
-                    return false
-                }
-                
-                // 规则B: 排除看起来像整数的大数字 (如 2025, 8090)
-                let isIntegerLooking = !priceTuple.text.contains(".")
-                if val > 100 && isIntegerLooking {
-                    return false
-                }
-                
-                return true
-            }
-            
-            // 策略 A：关键词行对齐 (强关联)
-            for keywordBox in keywords {
-                let candidates = validPrices.filter { price in
-                    // 计算 Y 轴中心点距离
-                    let yDiff = abs(price.box.midY - keywordBox.midY)
-                    // 严格判定：必须在同一行 (差异 < 3%)
-                    let isSameLine = yDiff < 0.03
-                    
-                    // 或者在关键词紧挨着的下方 (Total: \n 100.00)
-                    let isDirectlyBelow = (keywordBox.minY - price.box.maxY) < 0.05 && (keywordBox.minY - price.box.maxY) > -0.01
-                    
-                    return isSameLine || isDirectlyBelow
-                }
-                
-                if let match = candidates.max(by: { $0.value < $1.value }) {
-                    return match.value
-                }
-            }
-            
-            // 策略 B：底部区域最大值 (兜底)
-            let bottomPrices = validPrices.filter { $0.box.minY < 0.5 }
-            if let maxBottom = bottomPrices.max(by: { $0.value < $1.value }) {
-                return maxBottom.value
-            }
-            
-            return nil
-        }
-        
-        func extractCurrency(from text: String) -> Double? {
-            // 预处理：只保留数字和小数点，移除逗号和符号
-            let clean = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
-            
-            guard let value = Double(clean) else { return nil }
-            
-            // 基础过滤
-            if value < 0.01 { return nil } // 排除 0
-            
-            // 排除年份干扰 (2020-2030) 且没有小数点的
-            if !text.contains(".") && value >= 2020 && value <= 2030 { return nil }
-            
-            return value
-        }
     }
 }

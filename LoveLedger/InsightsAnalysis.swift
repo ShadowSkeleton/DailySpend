@@ -5,29 +5,16 @@ import SwiftData
 struct CustomTabSwitcher: View {
     @Binding var selectedTab: InsightTab
     var themeColor: Color
-    @Namespace private var animationNamespace
 
     var body: some View {
-        HStack(spacing: 0) {
+        Picker("Insights view", selection: $selectedTab) {
             ForEach(InsightTab.allCases) { tab in
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = tab }
-                    UISelectionFeedbackGenerator().selectionChanged()
-                } label: {
-                    Text(tab.displayName).font(.headline).fontWeight(selectedTab == tab ? .bold : .medium)
-                        .foregroundStyle(selectedTab == tab ? .white : .primary)
-                        .frame(maxWidth: .infinity).frame(height: 40)
-                        .background {
-                            if selectedTab == tab {
-                                RoundedRectangle(cornerRadius: 12).fill(themeColor).matchedGeometryEffect(id: "TabBackground", in: animationNamespace)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                Text(tab.displayName).tag(tab)
             }
         }
-        .padding(4).background(Color(uiColor: .tertiarySystemGroupedBackground)).cornerRadius(16)
+        .pickerStyle(.segmented)
+        .tint(themeColor)
+        .accessibilityIdentifier("insights-view-picker")
     }
 }
 
@@ -47,15 +34,15 @@ struct InsightAnalysisCard: View {
         let thisMonthExpenses = expenses.filter { $0.date >= startOfThisMonth && $0.date <= now }
         let lastMonthExpenses = expenses.filter { $0.date >= startOfLastMonth && $0.date <= endOfLastMonthMTD }
         
-        let thisTotal = thisMonthExpenses.reduce(0) { $0 + $1.amount }
-        let lastTotal = lastMonthExpenses.reduce(0) { $0 + $1.amount }
+        let thisTotal = thisMonthExpenses.reduce(0) { $0 + $1.normalizedAmount }
+        let lastTotal = lastMonthExpenses.reduce(0) { $0 + $1.normalizedAmount }
         
         if thisTotal == 0 && lastTotal == 0 { return nil }
         let diff = thisTotal - lastTotal
         if abs(diff) < 1 { return nil }
         
-        let thisCats = Dictionary(grouping: thisMonthExpenses, by: { $0.category }).mapValues { $0.reduce(0) { $0 + $1.amount } }
-        let lastCats = Dictionary(grouping: lastMonthExpenses, by: { $0.category }).mapValues { $0.reduce(0) { $0 + $1.amount } }
+        let thisCats = Dictionary(grouping: thisMonthExpenses, by: { $0.category }).mapValues { $0.reduce(0) { $0 + $1.normalizedAmount } }
+        let lastCats = Dictionary(grouping: lastMonthExpenses, by: { $0.category }).mapValues { $0.reduce(0) { $0 + $1.normalizedAmount } }
         let allCategories = Set(thisCats.keys).union(lastCats.keys)
         
         var driverCat = ""; var driverDelta = 0.0
@@ -77,41 +64,46 @@ struct InsightAnalysisCard: View {
         return (diff, driverCat, driverDelta, diff > 0)
     }
 
-    func explanationText(data: (diff: Double, driver: String, driverAmount: Double, isUp: Bool)) -> Text {
+    private func signedChangeAmount(for data: (diff: Double, driver: String, driverAmount: Double, isUp: Bool)) -> String {
+        let sign = data.isUp ? "+" : "−"
+        return sign + abs(data.diff).formatted(.currency(code: L10n.currencyCode))
+    }
+
+    private func driverDescription(for data: (diff: Double, driver: String, driverAmount: Double, isUp: Bool)) -> String {
         let categoryName = L10n.categoryName(data.driver)
-        let amountStr = (data.driverAmount > 0 ? "+" : "") + data.driverAmount.formatted(.currency(code: L10n.currencyCode))
-        if L10n.isZh { return Text("主要因为 \(categoryName) 支出的变化 (\(amountStr))").fontWeight(.bold) }
-        else { return Text("Mainly due to \(categoryName) spending (\(amountStr))").fontWeight(.bold) }
+        return L10n.isZh
+            ? "\(categoryName) 是主要原因。"
+            : "\(categoryName) drove the \(data.isUp ? "increase" : "decrease")."
     }
 
     var body: some View {
         if let data = analysis {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(L10n.isZh ? "月度支出摘要" : "Spending Summary").font(.headline).foregroundStyle(.secondary)
+                    Text(L10n.isZh ? "月度变化" : "Monthly Change")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
                     Button(action: { UIImpactFeedbackGenerator(style: .light).impactOccurred(); showInfo = true }) {
                         Image(systemName: "questionmark.circle").font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    HStack(spacing: 4) {
-                        Image(systemName: data.isUp ? "arrow.up" : "arrow.down")
-                        Text(L10n.isZh ? "对比上月同期" : "vs Same Period")
-                    }
-                    .font(.caption).fontWeight(.bold).padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(data.isUp ? Color.red.opacity(0.1) : Color.green.opacity(0.1))
-                    .foregroundStyle(data.isUp ? .red : .green).clipShape(Capsule())
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(abs(data.diff).formatted(.currency(code: L10n.currencyCode)))
-                        .font(.system(size: 34, weight: .heavy, design: .rounded)).foregroundStyle(Color.primary)
-                        .minimumScaleFactor(0.5).lineLimit(1)
-                    Text(data.isUp ? (L10n.isZh ? "增加" : "More") : (L10n.isZh ? "减少" : "Less"))
-                        .font(.headline).fontWeight(.semibold).foregroundStyle(data.isUp ? .red : .green)
-                }
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "info.circle.fill").font(.subheadline).foregroundStyle(.secondary).padding(.top, 2)
-                    explanationText(data: data).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.5)
-                }
+                Text(signedChangeAmount(for: data))
+                    .font(.system(size: 42, weight: .heavy, design: .rounded))
+                    .foregroundStyle(data.isUp ? .red : .green)
+                    .contentTransition(.numericText())
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                Text(driverDescription(for: data))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .accessibilityLabel(
+                        L10n.isZh
+                            ? "与上月同期相比，\(driverDescription(for: data))"
+                            : "Compared with the same point last month. \(driverDescription(for: data))"
+                    )
             }
             .padding(20).background(Color(uiColor: .secondarySystemGroupedBackground)).cornerRadius(20)
             .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6).padding(.horizontal)
@@ -134,7 +126,7 @@ struct RankingList: View {
     var categoryStats: [(name: String, displayName: String, total: Double, color: Color)] {
         let grouped = Dictionary(grouping: expenses, by: { $0.category })
         return grouped.map { (key, value) in
-            let total = value.reduce(0) { $0 + $1.amount }
+            let total = value.reduce(0) { $0 + $1.normalizedAmount }
             let color = Expense.categories.first(where: { $0.name == key })?.color ?? .gray
             return (key, L10n.categoryName(key), total, color)
         }.sorted {
@@ -195,8 +187,8 @@ struct CategoryRankingRow: View {
     }
     
     var budgetLimit: Double? {
-        guard let budget = categoryBudgets.first(where: { $0.category == item.name }), budget.amount > 0 else { return nil }
-        return budget.amount
+        guard let budget = categoryBudgets.first(where: { $0.category == item.name }), budget.normalizedAmount > 0 else { return nil }
+        return budget.normalizedAmount
     }
 
     var body: some View {
@@ -248,7 +240,7 @@ struct CategoryRankingRow: View {
                                 }
                             }
                             Spacer()
-                            Text(expense.amount.formatted(.currency(code: L10n.currencyCode))).font(.subheadline).fontWeight(.medium).foregroundStyle(item.color)
+                            Text(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode))).font(.subheadline).fontWeight(.medium).foregroundStyle(item.color)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 12).background(Color.gray.opacity(0.03))
                         .overlay(Rectangle().frame(height: 0.5).foregroundColor(Color.gray.opacity(0.1)), alignment: .bottom)

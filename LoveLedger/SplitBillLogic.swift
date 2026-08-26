@@ -108,6 +108,9 @@ class SplitSession: ObservableObject {
     }
     
     func removePerson(id: UUID) {
+        // A bill always needs at least one participant. Keeping that invariant
+        // prevents an accidental delete from making every total unrecordable.
+        guard people.count > 1 else { return }
         people.removeAll { $0.id == id }
         for index in sharedItems.indices {
             sharedItems[index].involvedPersonIDs.removeAll { $0 == id }
@@ -157,62 +160,119 @@ class SplitSession: ObservableObject {
     }
     
     // MARK: - Robust Math Engine
-    
-    private func round2(_ value: Double) -> Double {
-        (value * 100).rounded() / 100
+
+    private func money(_ value: Double) -> Money {
+        Money(value)
     }
-    
+
+    private func peopleIncluded(in item: SharedItem) -> [SplitPerson] {
+        // Always use the visible people order so an unavoidable extra cent is
+        // allocated predictably and the same on every redraw.
+        people.filter { item.involvedPersonIDs.contains($0.id) }
+    }
+
+    var hasUnallocatedSharedItems: Bool {
+        sharedItems.contains { peopleIncluded(in: $0).isEmpty }
+    }
+
+    var hasInvalidAmounts: Bool {
+        taxAmount.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? false
+        || customFixedTip.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? false
+        || customTipPercentage.map { $0 < 0 } ?? false
+        || people.flatMap(\.items).contains { !ExpenseInputValidator.isValidLineItemAmount($0.price) }
+        || sharedItems.contains { !ExpenseInputValidator.isValidLineItemAmount($0.price) }
+    }
+
+    var settlementValidationMessage: String? {
+        if people.isEmpty { return L10n.isZh ? "请至少保留一位参与者" : "Add at least one participant." }
+        if hasInvalidAmounts { return L10n.isZh ? "请输入大于 0 的金额" : "Enter amounts greater than zero." }
+        if hasUnallocatedSharedItems { return L10n.isZh ? "请为每个共享项目选择参与者" : "Choose people for every shared item." }
+        if sessionSubtotalMoney <= .zero { return L10n.isZh ? "请先添加至少一项消费" : "Add at least one item before settling." }
+        return nil
+    }
+
+    var isReadyToSettle: Bool {
+        settlementValidationMessage == nil
+    }
+
+    var canRemovePerson: Bool {
+        people.count > 1
+    }
+
+    private func sharedPortionMoney(for personID: UUID) -> Money {
+        sharedItems.reduce(.zero) { result, item in
+            let recipients = peopleIncluded(in: item)
+            guard let index = recipients.firstIndex(where: { $0.id == personID }) else { return result }
+            let allocation = Money.splitEvenly(money(item.price), among: recipients.count)
+            return result + allocation[index]
+        }
+    }
+
     func sharedPortion(for personID: UUID) -> Double {
-        var totalShare: Double = 0
-        
-        for item in sharedItems {
-            if item.involvedPersonIDs.contains(personID) {
-                let count = Double(item.involvedPersonIDs.count)
-                if count > 0 {
-                    totalShare += round2(item.price / count)
-                }
-            }
-        }
-        return totalShare
+        sharedPortionMoney(for: personID).amount
     }
-    
+
+    private func subtotalMoney(for person: SplitPerson) -> Money {
+        let personal = person.items.reduce(.zero) { $0 + money($1.price) }
+        return personal + sharedPortionMoney(for: person.id)
+    }
+
     func subtotal(for person: SplitPerson) -> Double {
-        round2(person.personalSubtotal + sharedPortion(for: person.id))
+        subtotalMoney(for: person).amount
     }
-    
+
+    private var sessionSubtotalMoney: Money {
+        let personal = people.flatMap(\.items).reduce(.zero) { $0 + money($1.price) }
+        let shared = sharedItems.reduce(.zero) { $0 + money($1.price) }
+        return personal + shared
+    }
+
     var sessionSubtotal: Double {
-        round2(people.reduce(0) { $0 + subtotal(for: $1) })
+        sessionSubtotalMoney.amount
     }
-    
+
+    private var totalTaxMoney: Money {
+        money(taxAmount ?? 0)
+    }
+
     var totalTaxAmount: Double {
-        taxAmount ?? 0
+        totalTaxMoney.amount
     }
-    
-    var totalTipAmount: Double {
+
+    private var totalTipMoney: Money {
         if tipSelection == -2 {
-            return customFixedTip ?? 0
-        } else {
-            let percentage = Double(tipSelection == -1 ? (customTipPercentage ?? 0) : tipSelection)
-            return round2(sessionSubtotal * percentage / 100.0)
+            return money(customFixedTip ?? 0)
         }
+
+        let percentage = tipSelection == -1 ? (customTipPercentage ?? 0) : tipSelection
+        return sessionSubtotalMoney.applying(percent: percentage)
     }
-    
+
+    var totalTipAmount: Double {
+        totalTipMoney.amount
+    }
+
+    private var sharedCostsMoney: Money {
+        totalTaxMoney + totalTipMoney
+    }
+
     var sharedCosts: Double {
-        totalTaxAmount + totalTipAmount
+        sharedCostsMoney.amount
     }
-    
+
     var grandTotal: Double {
-        sessionSubtotal + sharedCosts
+        (sessionSubtotalMoney + sharedCostsMoney).amount
     }
-    
+
+    private var sharedCostAllocations: [UUID: Money] {
+        let weights = people.map { max(0, subtotalMoney(for: $0).minorUnits) }
+        let allocations = Money.allocate(sharedCostsMoney, by: weights)
+        return Dictionary(uniqueKeysWithValues: zip(people.map(\.id), allocations))
+    }
+
     func finalTotal(for person: SplitPerson) -> Double {
-        guard sessionSubtotal > 0 else { return 0 }
-        
-        let personSub = subtotal(for: person)
-        let ratio = personSub / sessionSubtotal
-        let personTaxTip = sharedCosts * ratio
-        
-        return round2(personSub + personTaxTip)
+        guard sessionSubtotalMoney > .zero else { return 0 }
+        return (subtotalMoney(for: person) + (sharedCostAllocations[person.id] ?? .zero)).amount
     }
     
     func generateNote(for person: SplitPerson) -> String {

@@ -116,62 +116,69 @@ struct CalendarView: View {
                     let isToday = Calendar.current.isDateInToday(date)
                     let isFuture = Calendar.current.startOfDay(for: date) > Calendar.current.startOfDay(for: Date())
 
-                    VStack(spacing: 2) {
-                        Text("\(Calendar.current.component(.day, from: date))")
-                            .font(.caption2)
-                            .fontWeight(isToday ? .black : .bold)
-                            .foregroundStyle(isSelected ? Color(uiColor: .systemBackground) : (isFuture ? Color.gray.opacity(0.3) : .primary))
-                        if isToday {
-                            Circle()
-                                .fill(isSelected ? Color(uiColor: .systemBackground) : themeColor)
-                                .frame(width: 4, height: 4)
-                        } else {
-                            Spacer().frame(height: 4)
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            selectedDate = date
                         }
-                    }
-                    .frame(height: 40)
-                    .frame(maxWidth: .infinity)
-                    .background {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.primary)
-                                .shadow(radius: 2)
-                        } else if isFuture {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.gray.opacity(0.05))
-                        } else if total > 0 {
-                            if isBudgetEnabled && budgetAmount > 0 {
-                                let dailyLimit = budgetAmount / 30.0
-                                if total > dailyLimit * 1.5 {
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(Color.red.opacity(0.8))
+                        UISelectionFeedbackGenerator().selectionChanged()
+                    } label: {
+                        VStack(spacing: 2) {
+                            Text("\(Calendar.current.component(.day, from: date))")
+                                .font(.caption2)
+                                .fontWeight(isToday ? .black : .bold)
+                                .foregroundStyle(isSelected ? Color(uiColor: .systemBackground) : (isFuture ? Color.gray.opacity(0.3) : .primary))
+                            if isToday {
+                                Circle()
+                                    .fill(isSelected ? Color(uiColor: .systemBackground) : themeColor)
+                                    .frame(width: 4, height: 4)
+                            } else {
+                                Spacer().frame(height: 4)
+                            }
+                        }
+                        .frame(height: 40)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.primary)
+                                    .shadow(radius: 2)
+                            } else if isFuture {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.gray.opacity(0.05))
+                            } else if total > 0 {
+                                if isBudgetEnabled && budgetAmount > 0 {
+                                    let dailyLimit = budgetAmount / 30.0
+                                    if total > dailyLimit * 1.5 {
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .fill(Color.red.opacity(0.8))
+                                    } else {
+                                        let intensity = min(sqrt(total / colorBenchmark), 1.0)
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .fill(themeColor.opacity(0.15 + intensity * 0.85))
+                                    }
                                 } else {
                                     let intensity = min(sqrt(total / colorBenchmark), 1.0)
                                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                                         .fill(themeColor.opacity(0.15 + intensity * 0.85))
                                 }
                             } else {
-                                let intensity = min(sqrt(total / colorBenchmark), 1.0)
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(themeColor.opacity(0.15 + intensity * 0.85))
+                                    .fill(Color.gray.opacity(0.05))
                             }
-                        } else {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color.gray.opacity(0.05))
                         }
                     }
-                    .onTapGesture {
-                        if !isFuture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { selectedDate = date }
-                            UISelectionFeedbackGenerator().selectionChanged()
-                        }
-                    }
+                    .buttonStyle(.plain)
+                    .disabled(isFuture)
+                    .accessibilityLabel(calendarAccessibilityLabel(for: date, total: total, isToday: isToday))
+                    .accessibilityHint(isFuture
+                        ? (L10n.isZh ? "未来日期不可选择。" : "Future dates cannot be selected.")
+                        : (L10n.isZh ? "选择这一天以查看记录。" : "Select to view this day’s expenses."))
                 }
             }
             .padding(16)
             .background(RoundedRectangle(cornerRadius: 24).fill(cardBackground).shadow(color: .black.opacity(0.03), radius: 15))
             .padding(.horizontal)
-            .gesture(
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 20)
                     .onEnded { value in
                         guard abs(value.translation.width) > 30 else { return }
@@ -211,11 +218,20 @@ struct CalendarView: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
+    private func calendarAccessibilityLabel(for date: Date, total: Double, isToday: Bool) -> String {
+        let dateText = date.formatted(.dateTime.month(.wide).day().year())
+        let totalText = total > 0
+            ? total.formatted(.currency(code: L10n.currencyCode))
+            : (L10n.isZh ? "无支出" : "No expenses")
+        let todayText = isToday ? (L10n.isZh ? "，今天" : ", today") : ""
+        return "\(dateText)\(todayText)，\(totalText)"
+    }
+
     @MainActor func recalculateExpenses() async {
         let calendar = Calendar.current
         let filtered = expenses.filter { calendar.isDate($0.date, equalTo: currentMonth, toGranularity: .month) }
         var dict: [Date: Double] = [:]
-        for exp in filtered { dict[calendar.startOfDay(for: exp.date), default: 0] += exp.amount }
+        for exp in filtered { dict[calendar.startOfDay(for: exp.date), default: 0] += exp.normalizedAmount }
         self.cachedExpenses = dict
     }
 }
@@ -241,7 +257,7 @@ struct DayDetailView: View {
                             .bold()
                             .foregroundStyle(themeColor)
                     } else {
-                        let total = expenses.reduce(0) { $0 + $1.amount }
+                        let total = expenses.reduce(0) { $0 + $1.normalizedAmount }
                         Text("\(L10n.dailyTotal): \(total.formatted(.currency(code: L10n.currencyCode)))")
                             .font(.headline)
                             .bold()
@@ -268,7 +284,7 @@ struct DayDetailView: View {
                                     }
                                 }
                                 Spacer()
-                                Text(expense.amount.formatted(.currency(code: L10n.currencyCode)))
+                                Text(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode)))
                                     .font(.subheadline)
                                     .bold()
                             }
@@ -326,6 +342,7 @@ struct InsightsMonthYearPicker: View {
                         .background(Color.gray.opacity(0.1))
                         .clipShape(Circle())
                 }
+                .disabled(displayYear >= Calendar.current.component(.year, from: Date()))
             }
             .padding(.vertical, 10)
 
@@ -346,6 +363,7 @@ struct InsightsMonthYearPicker: View {
                                     .stroke(themeColor, lineWidth: isCurrentRealMonth && !isSelected ? 2 : 0)
                             )
                     }
+                    .disabled(isFutureMonth(month))
                 }
             }
             .padding(.horizontal)
@@ -375,10 +393,15 @@ struct InsightsMonthYearPicker: View {
         components.year = displayYear
         components.month = month
         components.day = 1
-        if let newDate = Calendar.current.date(from: components) {
+        if let newDate = Calendar.current.date(from: components), !isFutureMonth(month) {
             withAnimation { selection = newDate }
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             isPresented = false
         }
+    }
+
+    private func isFutureMonth(_ month: Int) -> Bool {
+        guard let candidate = Calendar.current.date(from: DateComponents(year: displayYear, month: month, day: 1)) else { return true }
+        return candidate > Date().startOfMonth()
     }
 }

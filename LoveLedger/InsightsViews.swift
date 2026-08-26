@@ -220,6 +220,12 @@ struct TrendsSection: View {
                     .frame(width: 44, height: 44)
                 }
                 .padding(.trailing, 8)
+                .accessibilityLabel(L10n.isZh
+                    ? (isCustomMode ? "退出自定义月份" : "选择自定义月份")
+                    : (isCustomMode ? "Exit custom month" : "Choose a custom month"))
+                .accessibilityHint(L10n.isZh
+                    ? "显示月份选择和前后月份导航。"
+                    : "Shows the month picker and previous or next month navigation.")
             }
             
             // MARK: 2. 月份导航器 (仅 Custom 模式)
@@ -232,6 +238,7 @@ struct TrendsSection: View {
                                 .font(.headline).foregroundStyle(themeColor)
                                 .frame(width: 44, height: 44).background(themeColor.opacity(0.1)).clipShape(Circle())
                         }
+                        .accessibilityLabel(L10n.isZh ? "上个月" : "Previous month")
                         
                         Button(action: { showMonthPicker = true }) {
                             Text(date.formatted(.dateTime.month(.wide).year()))
@@ -239,6 +246,7 @@ struct TrendsSection: View {
                                 .padding(.horizontal, 16).padding(.vertical, 10)
                                 .background(themeColor.opacity(0.1)).clipShape(Capsule())
                         }
+                        .accessibilityLabel(L10n.isZh ? "选择月份" : "Choose month")
                         
                         Button(action: { moveMonth(by: 1) }) {
                             Image(systemName: "chevron.right")
@@ -247,6 +255,7 @@ struct TrendsSection: View {
                                 .frame(width: 44, height: 44).background(themeColor.opacity(0.1)).clipShape(Circle())
                         }
                         .disabled(isFuture(date: date))
+                        .accessibilityLabel(L10n.isZh ? "下个月" : "Next month")
                     }
                     
                     // Row 2: "Back to Today" 单独一行，右对齐

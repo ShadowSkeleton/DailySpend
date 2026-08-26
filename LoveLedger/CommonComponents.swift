@@ -43,7 +43,7 @@ struct ExpenseRowCard: View {
                 }.font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Text("-\(expense.amount.formatted(.currency(code: L10n.currencyCode)))").roundedNumFont(size: 18, weight: .bold).foregroundStyle(.primary)
+            Text("-\(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode)))").roundedNumFont(size: 18, weight: .bold).foregroundStyle(.primary)
         }.padding(16)
     }
 }

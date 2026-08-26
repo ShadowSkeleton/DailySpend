@@ -7,6 +7,7 @@ struct SplitBillEvenlyView: View {
     var onFinish: (() -> Void)?
     var onUpdateReceiptData: ((ReceiptData) -> Void)?
     var onRequestShare: (() -> Void)?
+    var isPreparingShare = false
     
     // FIXED: Use String for TextField to avoid number formatting commit issues
     @State private var totalAmountText: String = ""
@@ -25,40 +26,92 @@ struct SplitBillEvenlyView: View {
     
     // MARK: - Computed Values (derived from String input)
     
-    private func round2(_ value: Double) -> Double { (value * 100).rounded() / 100 }
-    
     private var totalAmount: Double {
         Double(totalAmountText.replacingOccurrences(of: ",", with: "")) ?? 0
     }
-    
-    private var tipAmount: Double {
+
+    private var totalMoney: Money { Money(totalAmount) }
+
+    private var tipMoney: Money {
         if tipSelection == -2 {
-            return customFixedTip ?? 0
-        } else {
-            let percentage = Double(tipSelection == -1 ? (customTipPercentage ?? 0) : tipSelection)
-            return round2(totalAmount * percentage / 100.0)
+            return Money(customFixedTip ?? 0)
         }
+        let percentage = tipSelection == -1 ? (customTipPercentage ?? 0) : tipSelection
+        return totalMoney.applying(percent: percentage)
     }
-    
-    private var grandTotal: Double { round2(totalAmount + tipAmount) }
-    
+
+    private var tipAmount: Double {
+        tipMoney.amount
+    }
+
+    private var grandTotalMoney: Money { totalMoney + tipMoney }
+
+    private var grandTotal: Double { grandTotalMoney.amount }
+
+    private var allocatedAmounts: [Money] {
+        Money.splitEvenly(grandTotalMoney, among: peopleCount)
+    }
+
     private var perPerson: Double {
-        guard peopleCount > 0 else { return 0 }
-        return round2(grandTotal / Double(peopleCount))
+        allocatedAmounts.first?.amount ?? 0
     }
-    
+
+    private var hasUnevenRemainder: Bool {
+        Set(allocatedAmounts.map(\.minorUnits)).count > 1
+    }
+
+    private var allocationSummary: String {
+        let groups = Dictionary(grouping: allocatedAmounts, by: \.minorUnits)
+            .map { (amount: $0.key, count: $0.value.count) }
+            .sorted { $0.amount > $1.amount }
+
+        guard groups.count > 1 else {
+            return L10n.isZh
+                ? "每人支付 \(perPerson.formatted(.currency(code: L10n.currencyCode)))"
+                : "Each pays \(perPerson.formatted(.currency(code: L10n.currencyCode)))"
+        }
+
+        return groups.map { group in
+            let formatted = Money(minorUnits: group.amount).amount.formatted(.currency(code: L10n.currencyCode))
+            return L10n.isZh
+                ? "\(group.count) 人支付 \(formatted)"
+                : "\(group.count) pay \(formatted)"
+        }.joined(separator: " • ")
+    }
+
+    private var canSettle: Bool {
+        guard ExpenseInputValidator.isValidLineItemAmount(totalAmount) else { return false }
+        if tipSelection == -2 {
+            return customFixedTip.map(ExpenseInputValidator.isValidLineItemAmount) ?? false
+        }
+        return customTipPercentage.map { $0 >= 0 } ?? true
+    }
+
+    private var validationMessage: String? {
+        guard totalAmountText.isEmpty || ExpenseInputValidator.isValidLineItemAmount(totalAmount) else {
+            return L10n.isZh ? "请输入大于 0 的账单总额" : "Enter a bill total greater than zero."
+        }
+        if tipSelection == -2, !(customFixedTip.map(ExpenseInputValidator.isValidLineItemAmount) ?? false) {
+            return L10n.isZh ? "请输入大于 0 的固定小费" : "Enter a fixed tip greater than zero."
+        }
+        if customTipPercentage.map({ $0 < 0 }) == true {
+            return L10n.isZh ? "小费比例不能为负数" : "Tip percentage can’t be negative."
+        }
+        return nil
+    }
+
     // New computed properties for record amount and note
     private var recordAmount: Double {
-        perPerson
+        allocatedAmounts.first?.amount ?? 0
     }
     
     private var recordNote: String {
         let totalF = grandTotal.formatted(.currency(code: L10n.currencyCode))
-        let perPersonF = perPerson.formatted(.currency(code: L10n.currencyCode))
+        let perPersonF = recordAmount.formatted(.currency(code: L10n.currencyCode))
         
         return L10n.isZh
-            ? "AA分账: 总额\(totalF) ÷ \(peopleCount)人 = \(perPersonF)/人"
-            : "Split: Total \(totalF) ÷ \(peopleCount) ppl = \(perPersonF)/ea"
+            ? "AA分账: 总额\(totalF)；我的份额 \(perPersonF)。\(allocationSummary)"
+            : "Split: Total \(totalF); my share \(perPersonF). \(allocationSummary)"
     }
     
     var body: some View {
@@ -70,12 +123,17 @@ struct SplitBillEvenlyView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .onTapGesture {
-            isAmountFocused = false
-            isCustomTipFocused = false
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                KeyboardDismissButton {
+                    isAmountFocused = false
+                    isCustomTipFocused = false
+                }
+            }
         }
-        .onChange(of: resetTrigger) { newValue in
-            if newValue {
+        .onChange(of: resetTrigger) { _, shouldReset in
+            if shouldReset {
                 withAnimation {
                     totalAmountText = ""
                     peopleCount = 2
@@ -113,22 +171,21 @@ struct SplitBillEvenlyView: View {
                     }
             }
         }
-        .padding(.vertical, 32)
+        .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 24)
                 .fill(Color(uiColor: .systemBackground))
-                .shadow(color: .black.opacity(0.08), radius: 15, x: 0, y: 5)
+                .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 3)
         )
         .padding(.horizontal)
-        .onTapGesture { isAmountFocused = true }
     }
     
     private var controlsSection: some View {
         VStack(spacing: 24) {
             // People Count
             HStack {
-                Label(L10n.isZh ? "人数" : "Split by", systemImage: "person.2.fill")
+                Label(L10n.isZh ? "参与人数" : "People", systemImage: "person.2.fill")
                     .font(.headline)
                 Spacer()
                 
@@ -141,6 +198,7 @@ struct SplitBillEvenlyView: View {
                             .foregroundStyle(peopleCount > 1 ? .secondary : .tertiary)
                     }
                     .disabled(peopleCount <= 1)
+                    .accessibilityLabel(L10n.isZh ? "减少参与者" : "Remove person")
                     
                     Text("\(peopleCount)")
                         .font(.title3)
@@ -155,6 +213,7 @@ struct SplitBillEvenlyView: View {
                             .font(.title2)
                             .foregroundStyle(.secondary)
                     }
+                    .accessibilityLabel(L10n.isZh ? "增加参与者" : "Add person")
                 }
                 .padding(8)
                 .background(Color(uiColor: .tertiarySystemGroupedBackground))
@@ -174,21 +233,23 @@ struct SplitBillEvenlyView: View {
                         .fontWeight(.bold)
                 }
                 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach([10, 15, 18, 20], id: \.self) { pct in
-                            TipCapsule(text: "\(pct)%", isSelected: tipSelection == pct, color: themeColor) {
-                                tipSelection = pct; updateReceipt()
-                            }
-                        }
-                        TipCapsule(text: "Custom %", isSelected: tipSelection == -1, color: themeColor) {
-                            tipSelection = -1; updateReceipt()
-                        }
-                        TipCapsule(text: "Fixed $", isSelected: tipSelection == -2, color: themeColor) {
-                            tipSelection = -2; updateReceipt()
+                // A compact grid keeps every choice visible on a phone. The former
+                // horizontal row hid the custom choices off-screen at first glance.
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+                    spacing: 10
+                ) {
+                    ForEach([10, 15, 18, 20], id: \.self) { pct in
+                        TipCapsule(text: "\(pct)%", isSelected: tipSelection == pct, color: themeColor) {
+                            tipSelection = pct; updateReceipt()
                         }
                     }
-                    .padding(.vertical, 4)
+                    TipCapsule(text: L10n.isZh ? "自定比例" : "Custom %", isSelected: tipSelection == -1, color: themeColor) {
+                        tipSelection = -1; updateReceipt()
+                    }
+                    TipCapsule(text: L10n.isZh ? "固定金额" : "Fixed \(L10n.currencySymbol)", isSelected: tipSelection == -2, color: themeColor) {
+                        tipSelection = -2; updateReceipt()
+                    }
                 }
                 
                 // Custom Tip Inputs
@@ -235,12 +296,24 @@ struct SplitBillEvenlyView: View {
     private var resultSection: some View {
         VStack(spacing: 20) {
             VStack(spacing: 8) {
-                Text(L10n.isZh ? "每人支付" : "PER PERSON")
+                Text(hasUnevenRemainder ? (L10n.isZh ? "我的份额" : "YOUR SHARE") : (L10n.isZh ? "每人支付" : "PER PERSON"))
                     .font(.caption).fontWeight(.bold).foregroundStyle(.secondary)
                 
                 Text(perPerson.formatted(.currency(code: L10n.currencyCode)))
                     .font(.system(size: 48, weight: .black, design: .rounded))
                     .contentTransition(.numericText())
+
+                Text(allocationSummary)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            if let validationMessage {
+                Label(validationMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             
             // Action Buttons
@@ -248,13 +321,16 @@ struct SplitBillEvenlyView: View {
                 // Share Button
                 Button(action: { onRequestShare?() }) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.title3)
-                        .foregroundStyle(.white)
                         .frame(width: 60, height: 56)
-                        .background(themeColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: themeColor.opacity(0.3), radius: 5, x: 0, y: 3)
                 }
+                .buttonStyle(.bordered)
+                .tint(themeColor)
+                .disabled(!canSettle || isPreparingShare)
+                .opacity(canSettle && !isPreparingShare ? 1 : 0.45)
+                .accessibilityLabel(L10n.isZh ? "分享分账收据" : "Share split receipt")
+                .accessibilityHint(isPreparingShare
+                    ? (L10n.isZh ? "正在准备收据" : "Preparing receipt")
+                    : (L10n.isZh ? "分享完整分账收据" : "Shares the completed split receipt."))
                 
                 // Record Button - opens the dedicated sheet
                 Button(action: {
@@ -265,13 +341,13 @@ struct SplitBillEvenlyView: View {
                         Text(L10n.isZh ? "记录我的份额" : "Record My Share")
                     }
                     .font(.headline)
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
-                    .background(themeColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: themeColor.opacity(0.3), radius: 5, x: 0, y: 3)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(themeColor)
+                .disabled(!canSettle)
+                .opacity(canSettle ? 1 : 0.45)
                 .sheet(isPresented: $showRecordSheet) {
                     AddExpenseView(
                         themeColor: themeColor,
@@ -303,7 +379,7 @@ struct SplitBillEvenlyView: View {
     
     private func updateReceipt() {
         let items: [ReceiptItem] = [
-            .currency(L10n.isZh ? "每人" : "Per Person", perPerson),
+            .text(L10n.isZh ? "分摊" : "Split", allocationSummary),
             .integer(L10n.isZh ? "人数" : "People", peopleCount)
         ]
         
@@ -314,7 +390,7 @@ struct SplitBillEvenlyView: View {
             tax: 0,
             tip: tipAmount,
             total: grandTotal,
-            footer: "Split by \(peopleCount) • Generated by LoveLedger"
+            footer: "Split by \(peopleCount) • Generated by DailySpend"
         )
         onUpdateReceiptData?(data)
     }

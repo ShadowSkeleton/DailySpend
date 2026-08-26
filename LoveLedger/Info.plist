@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>DailySpend uses the camera to scan a receipt and suggest its total. Receipt images are processed on your device.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>DailySpend can use Face ID to protect your financial records when you turn on App Lock.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

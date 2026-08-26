@@ -4,6 +4,7 @@ import SwiftData
 // MARK: - Home View
 struct HomeView: View {
     let themeColor: Color
+    var onOpenSplitBill: () -> Void = { }
     let backgroundColor = Color(uiColor: .systemGroupedBackground)
     
     @Environment(\.modelContext) private var modelContext
@@ -13,6 +14,10 @@ struct HomeView: View {
     @State private var showingAddSheet = false
     @State private var expenseToEdit: Expense?
     @State private var homeSelectedMonth = Date()
+    @State private var expensePendingDeletion: Expense?
+    @State private var showDeleteConfirmation = false
+    @State private var showDeleteError = false
+    @State private var deleteErrorMessage = ""
     
     @AppStorage("isBudgetEnabled") private var isBudgetEnabled = false
     @AppStorage("budgetAmount") private var budgetAmount = 0.0
@@ -41,14 +46,13 @@ struct HomeView: View {
                     
                     // MARK: - Transaction List Section
                     if filteredExpenses.isEmpty {
-                        ContentUnavailableView(
-                            L10n.noExpensesTitle,
-                            systemImage: "creditcard.and.123",
-                            description: Text(L10n.noExpensesDesc)
+                        HomeEmptyState(
+                            onAddExpense: { showingAddSheet = true },
+                            onOpenSplitBill: onOpenSplitBill
                         )
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
-                        .padding(.top, 40)
+                        .padding(.top, 28)
                     } else {
                         Section(header:
                             HStack {
@@ -62,13 +66,20 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                         ) {
                             ForEach(filteredExpenses) { expense in
-                                ExpenseRowCard(expense: expense)
+                                Button {
+                                    expenseToEdit = expense
+                                } label: {
+                                    ExpenseRowCard(expense: expense)
+                                }
+                                .buttonStyle(.plain)
                                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                                     .cornerRadius(12)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) { deleteItem(expense) } label: { Label(L10n.deleteTransaction, systemImage: "trash") }
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button(role: .destructive) {
+                                            expensePendingDeletion = expense
+                                            showDeleteConfirmation = true
+                                        } label: { Label(L10n.deleteTransaction, systemImage: "trash") }
                                     }
-                                    .onTapGesture { expenseToEdit = expense }
                                     .listRowSeparator(.hidden)
                                     .listRowBackground(Color.clear)
                                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
@@ -82,19 +93,36 @@ struct HomeView: View {
             .navigationTitle("DailySpend")
             .toolbarBackground(backgroundColor, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    ShareLink(item: generateCSV(), preview: SharePreview("DailySpend Data.csv", image: Image(systemName: "tablecells"))) {
-                        Image(systemName: "square.and.arrow.up").font(.system(size: 17)).foregroundStyle(themeColor)
+                if !filteredExpenses.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        ShareLink(item: generateCSV(), preview: SharePreview("DailySpend Data.csv", image: Image(systemName: "tablecells"))) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel(L10n.isZh ? "导出账单" : "Export expenses")
+                        .accessibilityHint(L10n.isZh ? "导出当前月份的账单 CSV 文件" : "Exports this month's expenses as a CSV file.")
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showingAddSheet = true }) {
                         Image(systemName: "plus").font(.system(size: 20, weight: .bold)).foregroundStyle(themeColor)
                     }
+                    .accessibilityLabel(L10n.isZh ? "添加账单" : "Add expense")
+                    .accessibilityHint(L10n.isZh ? "记录一笔新支出或扫描收据" : "Record a new expense or scan a receipt.")
                 }
             }
             .sheet(isPresented: $showingAddSheet) { AddExpenseView(themeColor: themeColor) }
             .sheet(item: $expenseToEdit) { expense in EditExpenseView(expense: expense, themeColor: themeColor) }
+            .alert("Delete this expense?", isPresented: $showDeleteConfirmation) {
+                Button(L10n.cancel, role: .cancel) { expensePendingDeletion = nil }
+                Button(L10n.deleteTransaction, role: .destructive) { deletePendingExpense() }
+            } message: {
+                Text("You can restore it later only if it exists in an iCloud or JSON backup.")
+            }
+            .alert("Couldn’t Delete Expense", isPresented: $showDeleteError) {
+                Button(L10n.ok, role: .cancel) { }
+            } message: {
+                Text(deleteErrorMessage)
+            }
         }
         .onOpenURL { url in
             if url.scheme == "loveledger" && url.host == "add" { showingAddSheet = true }
@@ -107,10 +135,21 @@ struct HomeView: View {
     }
     
     var currentMonthTotal: Double {
-        filteredExpenses.reduce(0) { $0 + $1.amount }
+        filteredExpenses.reduce(0) { $0 + $1.normalizedAmount }
     }
     
-    private func deleteItem(_ expense: Expense) { withAnimation { modelContext.delete(expense) } }
+    private func deletePendingExpense() {
+        guard let expense = expensePendingDeletion else { return }
+        do {
+            modelContext.delete(expense)
+            try modelContext.save()
+            expensePendingDeletion = nil
+        } catch {
+            modelContext.rollback()
+            deleteErrorMessage = error.localizedDescription
+            showDeleteError = true
+        }
+    }
     
     private func generateCSV() -> CSVDocument {
         var csvString = "Date,Category,Amount,Note\n"
@@ -118,9 +157,48 @@ struct HomeView: View {
         for expense in filteredExpenses {
             var safeNote = expense.note.replacingOccurrences(of: "\"", with: "\"\"")
             safeNote = "\"\(safeNote)\""
-            csvString.append("\(dateFormatter.string(from: expense.date)),\(L10n.categoryName(expense.category)),\(expense.amount),\(safeNote)\n")
+            csvString.append("\(dateFormatter.string(from: expense.date)),\(L10n.categoryName(expense.category)),\(expense.normalizedAmount),\(safeNote)\n")
         }
         return CSVDocument(text: csvString)
+    }
+}
+
+// MARK: - First-use path
+private struct HomeEmptyState: View {
+    let onAddExpense: () -> Void
+    let onOpenSplitBill: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            ContentUnavailableView(
+                L10n.noExpensesTitle,
+                systemImage: "creditcard.and.123",
+                description: Text(L10n.isZh
+                    ? "添加支出、扫描收据，或和朋友轻松分账。"
+                    : "Add an expense, scan a receipt, or settle a bill with friends.")
+            )
+
+            VStack(spacing: 10) {
+                Button(action: onAddExpense) {
+                    Label(L10n.isZh ? "记录第一笔支出" : "Add your first expense", systemImage: "plus")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityIdentifier("add-first-expense")
+
+                Button(action: onOpenSplitBill) {
+                    Label(L10n.isZh ? "发起分账" : "Start a Split Bill", systemImage: "person.2.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .accessibilityIdentifier("start-split-bill")
+            }
+            .frame(maxWidth: 280)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 24)
     }
 }
 
@@ -147,9 +225,9 @@ struct HomeHeaderView: View {
         var items: [(String, Double)] = []
         let expensesByCategory = Dictionary(grouping: monthlyExpenses, by: { $0.category })
         for budget in categoryBudgets {
-            let spent = expensesByCategory[budget.category]?.reduce(0) { $0 + $1.amount } ?? 0
-            if spent > budget.amount {
-                items.append((budget.category, spent - budget.amount))
+            let spent = expensesByCategory[budget.category]?.reduce(0) { $0 + $1.normalizedAmount } ?? 0
+            if spent > budget.normalizedAmount {
+                items.append((budget.category, spent - budget.normalizedAmount))
             }
         }
         return items.sorted { $0.1 > $1.1 }
@@ -206,7 +284,7 @@ struct HomeHeaderView: View {
                         .roundedNumFont(size: 32, weight: .bold)
                         .foregroundStyle(themeColor)
                     Text(total.formatted(.number.precision(.fractionLength(2))))
-                        .roundedNumFont(size: 52, weight: .heavy)
+                        .roundedNumFont(size: 48, weight: .heavy)
                         .contentTransition(.numericText())
                         .foregroundStyle(.primary)
                         .minimumScaleFactor(0.5)
@@ -243,10 +321,12 @@ struct HomeHeaderView: View {
                 }
             }
             .contentShape(Rectangle())
-            // ✨ 核心逻辑：拖拽手势
-            .gesture(
-                DragGesture()
+            // Let the List keep its native vertical scroll while supporting a
+            // deliberate horizontal month change on the summary card.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 24)
                     .onEnded { value in
+                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
                         if value.translation.width < -50 {
                             // 左滑 (前往下个月)
                             changeMonth(by: 1)
@@ -278,7 +358,6 @@ struct HomeHeaderView: View {
                             .foregroundStyle(Color.red)
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(Color.red.opacity(0.2), lineWidth: 1))
-                            .onTapGesture { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                         }
                     }
                     .padding(.horizontal, 24)
@@ -305,6 +384,16 @@ struct HomeHeaderView: View {
         }
         .padding(.horizontal)
         .padding(.top, 8)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                changeMonth(by: 1)
+            case .decrement:
+                changeMonth(by: -1)
+            @unknown default:
+                break
+            }
+        }
         
         .sheet(isPresented: $showMonthPicker) {
             MonthYearPicker(selection: $currentMonth, themeColor: themeColor, isPresented: $showMonthPicker)
@@ -370,6 +459,7 @@ struct MonthYearPicker: View {
                 Button(action: { withAnimation { displayYear -= 1 }; UIImpactFeedbackGenerator(style: .light).impactOccurred() }) { Image(systemName: "chevron.left").font(.title3.bold()).foregroundStyle(.secondary).padding(10).background(Color.gray.opacity(0.1)).clipShape(Circle()) }
                 Text(String(displayYear).replacingOccurrences(of: ",", with: "")).font(.largeTitle.bold()).frame(minWidth: 100).contentTransition(.numericText())
                 Button(action: { withAnimation { displayYear += 1 }; UIImpactFeedbackGenerator(style: .light).impactOccurred() }) { Image(systemName: "chevron.right").font(.title3.bold()).foregroundStyle(.secondary).padding(10).background(Color.gray.opacity(0.1)).clipShape(Circle()) }
+                    .disabled(displayYear >= Calendar.current.component(.year, from: Date()))
             }.padding(.vertical, 10)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
                 ForEach(1...12, id: \.self) { month in
@@ -380,6 +470,7 @@ struct MonthYearPicker: View {
                             .foregroundStyle(isSelected ? .white : (isCurrentRealMonth ? themeColor : .primary))
                             .cornerRadius(12).overlay(RoundedRectangle(cornerRadius: 12).stroke(themeColor, lineWidth: isCurrentRealMonth && !isSelected ? 2 : 0))
                     }
+                    .disabled(isFutureMonth(month))
                 }
             }.padding(.horizontal)
             Spacer()
@@ -387,5 +478,9 @@ struct MonthYearPicker: View {
     }
     private func isSelectedMonth(_ month: Int) -> Bool { let selYear = Calendar.current.component(.year, from: selection); let selMonth = Calendar.current.component(.month, from: selection); return selYear == displayYear && selMonth == month }
     private func isThisRealMonth(_ month: Int) -> Bool { let now = Date(); let year = Calendar.current.component(.year, from: now); let m = Calendar.current.component(.month, from: now); return year == displayYear && m == month }
-    private func selectMonth(_ month: Int) { var components = DateComponents(); components.year = displayYear; components.month = month; components.day = 1; if let newDate = Calendar.current.date(from: components) { withAnimation { selection = newDate }; UIImpactFeedbackGenerator(style: .medium).impactOccurred(); isPresented = false } }
+    private func isFutureMonth(_ month: Int) -> Bool {
+        guard let candidate = Calendar.current.date(from: DateComponents(year: displayYear, month: month, day: 1)) else { return true }
+        return candidate > Date().startOfMonth()
+    }
+    private func selectMonth(_ month: Int) { var components = DateComponents(); components.year = displayYear; components.month = month; components.day = 1; if let newDate = Calendar.current.date(from: components), !isFutureMonth(month) { withAnimation { selection = newDate }; UIImpactFeedbackGenerator(style: .medium).impactOccurred(); isPresented = false } }
 }
