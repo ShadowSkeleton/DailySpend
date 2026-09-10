@@ -148,19 +148,7 @@ struct SplitBillView: View {
         Task { @MainActor in
             await Task.yield()
 
-            let receiptView = ReceiptView(data: data)
-                .frame(width: 375)
-                .background(Color.white)
-                .environment(\.colorScheme, .light)
-                .environment(\.displayScale, displayScale)
-            
-            let renderer = ImageRenderer(content: receiptView)
-            
-            renderer.scale = displayScale
-            renderer.proposedSize = ProposedViewSize(width: 375, height: nil)
-            renderer.isOpaque = true
-
-            if let image = renderer.uiImage,
+            if let image = ReceiptImageExporter.image(data: data, scale: displayScale),
                image.size.width > 0,
                image.size.height > 0 {
                 shareReceipt = ShareReceipt(image: image)
@@ -173,6 +161,39 @@ struct SplitBillView: View {
 
             isGeneratingImage = false
         }
+    }
+}
+
+@MainActor
+enum ReceiptImageExporter {
+    static func image(data: ReceiptData, scale: CGFloat,
+                      dynamicTypeSize: DynamicTypeSize = .large) -> UIImage? {
+        let content = ReceiptView(data: data)
+            .environment(\.colorScheme, .light)
+            .environment(\.displayScale, scale)
+            .environment(\.dynamicTypeSize, dynamicTypeSize)
+        let renderer = ImageRenderer(content: content)
+        renderer.proposedSize = ProposedViewSize(width: 375, height: nil)
+        var result: UIImage?
+        // Draw into a bitmap context: very tall receipts can exceed the surface
+        // size supported by ImageRenderer.uiImage and produce an empty export.
+        renderer.render(rasterizationScale: scale) { size, draw in
+            guard size.width > 0, size.height > 0,
+                  size.width.isFinite, size.height.isFinite,
+                  scale.isFinite, scale > 0,
+                  size.width * size.height * scale * scale <= 24_000_000 else { return }
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = scale
+            format.opaque = true
+            result = UIGraphicsImageRenderer(size: size, format: format).image { context in
+                UIColor.white.setFill()
+                context.fill(CGRect(origin: .zero, size: size))
+                context.cgContext.translateBy(x: 0, y: size.height)
+                context.cgContext.scaleBy(x: 1, y: -1)
+                draw(context.cgContext)
+            }
+        }
+        return result
     }
 }
 
@@ -228,23 +249,43 @@ struct ReceiptView: View {
                             Text(item.label)
                                 .font(.system(.headline, design: .serif))
                                 .fontWeight(.bold)
+                                .fixedSize(horizontal: false, vertical: true)
                                 .padding(.top, 12) // Add extra space before new person
                             Spacer()
                         }
                     } else {
-                        // Standard Item Style
-                        HStack {
-                            Text(item.label)
-                                .font(.system(.body, design: .monospaced))
-                                .fontWeight(.medium)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .foregroundStyle(item.label.contains("Total") || item.label.contains("总计") ? .primary : .secondary)
-                            Spacer()
-                            Text(item.value.displayString)
-                                .font(.system(.body, design: .monospaced))
-                                .fontWeight(item.label.contains("Total") || item.label.contains("总计") ? .bold : .regular)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                if item.style == .detail {
+                                    Text("•").foregroundStyle(Color(white: 0.4))
+                                }
+                                Text(item.label)
+                                    .font(item.style == .detail ? .subheadline : .body)
+                                    .fontWeight(item.style == .standard || item.style == .detail ? .regular : .semibold)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Text(item.value.displayString)
+                                    .font(item.style == .detail ? .subheadline : .body)
+                                    .monospacedDigit()
+                                    .fontWeight(item.style == .personTotal ? .bold : .medium)
+                                    .fixedSize()
+                            }
+                            if let subtitle = item.subtitle {
+                                Text(subtitle)
+                                    .font(.caption2)
+                                    .foregroundStyle(Color(white: 0.35))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if !item.participants.isEmpty {
+                                ReceiptParticipantsView(names: item.participants)
+                                    .padding(.leading, 18)
+                            }
                         }
+                        .padding(.leading, item.style == .detail ? 14 : 0)
+                        .padding(.vertical, item.style == .personTotal || item.style == .sharedSubtotal ? 6 : 2)
+                        .padding(.horizontal, 8)
+                        .background(item.style == .sharedSubtotal || item.style == .personTotal ? Color(white: 0.96) : .clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
             }
@@ -291,6 +332,41 @@ struct ReceiptView: View {
         .frame(width: 375)
         .background(Color.white)
         .foregroundColor(.black)
+    }
+}
+
+private struct ReceiptParticipantsView: View {
+    let names: [String]
+
+    private var heading: String { L10n.isZh ? "共同分摊" : "Shared by" }
+
+    var body: some View {
+        Group {
+            if names.count <= 2 {
+                ViewThatFits(in: .horizontal) {
+                    Text("\(heading) \(names.joined(separator: L10n.isZh ? "和" : " and "))")
+                        .fixedSize(horizontal: true, vertical: false)
+                    stackedNames
+                }
+            } else {
+                stackedNames
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(Color(white: 0.35))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var stackedNames: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(heading)
+            // Indices preserve distinct participants who happen to share a name.
+            ForEach(names.indices, id: \.self) { index in
+                Text(names[index])
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 10)
+            }
+        }
     }
 }
 

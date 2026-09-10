@@ -100,6 +100,20 @@ final class Expense {
         return frequency ?? .none
     }
 
+    /// Presentation-only cleanup for older generated entries. Never rewrite
+    /// stored notes during a fetch or strip a user's ordinary non-recurring note.
+    var displayNote: String {
+        let visibleNote: String
+        if isRecurringChild && note == "(Auto)" {
+            visibleNote = ""
+        } else if isRecurringChild && note.hasSuffix(" (Auto)") {
+            visibleNote = String(note.dropLast(" (Auto)".count))
+        } else {
+            visibleNote = note
+        }
+        return SplitNote.readableLegacyNote(visibleNote)
+    }
+
     var money: Money {
         amountMinorUnits.map(Money.init(minorUnits:)) ?? Money(amount)
     }

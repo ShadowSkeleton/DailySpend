@@ -27,7 +27,24 @@ struct SplitBillEvenlyView: View {
     // MARK: - Computed Values (derived from String input)
     
     private var totalAmount: Double {
-        Double(totalAmountText.replacingOccurrences(of: ",", with: "")) ?? 0
+        MoneyTextInput.parse(totalAmountText) ?? 0
+    }
+
+    private var totalAmountDisplayLength: Int {
+        max(1, totalAmountText.count)
+    }
+
+    private var totalAmountFontSize: CGFloat {
+        switch totalAmountDisplayLength {
+        case ...6: 64
+        case ...9: 50
+        case ...12: 38
+        default: 26
+        }
+    }
+
+    private var totalAmountFieldWidth: CGFloat {
+        min(270, max(48, CGFloat(totalAmountDisplayLength) * totalAmountFontSize * 0.64 + 8))
     }
 
     private var totalMoney: Money { Money(totalAmount) }
@@ -106,12 +123,7 @@ struct SplitBillEvenlyView: View {
     }
     
     private var recordNote: String {
-        let totalF = grandTotal.formatted(.currency(code: L10n.currencyCode))
-        let perPersonF = recordAmount.formatted(.currency(code: L10n.currencyCode))
-        
-        return L10n.isZh
-            ? "AA分账: 总额\(totalF)；我的份额 \(perPersonF)。\(allocationSummary)"
-            : "Split: Total \(totalF); my share \(perPersonF). \(allocationSummary)"
+        SplitNote.quick(total: grandTotalMoney, share: Money(recordAmount), people: peopleCount)
     }
     
     var body: some View {
@@ -156,20 +168,26 @@ struct SplitBillEvenlyView: View {
             Text(L10n.isZh ? "账单总额" : "TOTAL BILL")
                 .font(.caption).fontWeight(.bold).foregroundStyle(.secondary).tracking(2)
             
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(L10n.currencySymbol)
-                    .font(.largeTitle).foregroundStyle(.secondary)
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("total-bill-currency")
                 
                 TextField("0", text: $totalAmountText)
-                    .font(.system(size: 64, weight: .heavy, design: .rounded))
-                    .multilineTextAlignment(.center)
+                    .font(.system(size: totalAmountFontSize, weight: .heavy, design: .rounded))
+                    .multilineTextAlignment(.leading)
+                    .frame(width: totalAmountFieldWidth, alignment: .leading)
                     .keyboardType(.decimalPad)
                     .focused($isAmountFocused)
                     .foregroundStyle(themeColor)
+                    .accessibilityLabel(L10n.isZh ? "账单总额" : "Total bill amount")
+                    .accessibilityIdentifier("total-bill-amount")
                     .onChange(of: totalAmountText) { _, _ in
                         updateReceipt()
                     }
             }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
@@ -240,14 +258,14 @@ struct SplitBillEvenlyView: View {
                     spacing: 10
                 ) {
                     ForEach([10, 15, 18, 20], id: \.self) { pct in
-                        TipCapsule(text: "\(pct)%", isSelected: tipSelection == pct, color: themeColor) {
+                        TipOptionButton(text: "\(pct)%", isSelected: tipSelection == pct, color: themeColor) {
                             tipSelection = pct; updateReceipt()
                         }
                     }
-                    TipCapsule(text: L10n.isZh ? "自定比例" : "Custom %", isSelected: tipSelection == -1, color: themeColor) {
+                    TipOptionButton(text: L10n.isZh ? "自定比例" : "Custom %", isSelected: tipSelection == -1, color: themeColor) {
                         tipSelection = -1; updateReceipt()
                     }
-                    TipCapsule(text: L10n.isZh ? "固定金额" : "Fixed \(L10n.currencySymbol)", isSelected: tipSelection == -2, color: themeColor) {
+                    TipOptionButton(text: L10n.isZh ? "固定金额" : "Fixed \(L10n.currencySymbol)", isSelected: tipSelection == -2, color: themeColor) {
                         tipSelection = -2; updateReceipt()
                     }
                 }

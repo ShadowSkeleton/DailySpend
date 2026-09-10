@@ -1,10 +1,27 @@
 import Foundation
 import SwiftData
 import XCTest
-@testable import LoveLedger
+import SwiftUI
+@testable import DailySpend
 
 @MainActor
 final class MoneyAndSplitTests: XCTestCase {
+    func testWalletBrandAssetLoadsAndAboutRenders() throws {
+        let logo = try XCTUnwrap(UIImage(named: "DailySpendLogo"))
+        XCTAssertEqual(logo.size.width, logo.size.height)
+        XCTAssertGreaterThanOrEqual(logo.size.width * logo.scale, 1024)
+        let renderer = ImageRenderer(content: Image("DailySpendLogo")
+            .resizable().scaledToFit().frame(width: 60, height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous)))
+        renderer.scale = 3
+        let image = try XCTUnwrap(renderer.uiImage)
+        XCTAssertNotNil(image.pngData())
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "Wallet logo at home screen size"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testReceiptParserPrefersPayableTotalOverSubtotal() {
         let amount = ReceiptAmountParser.bestAmount(from: [
             .init(text: "Subtotal 89.00", boundingBox: CGRect(x: 0.65, y: 0.42, width: 0.2, height: 0.03)),
@@ -29,6 +46,169 @@ final class MoneyAndSplitTests: XCTestCase {
 
         XCTAssertEqual(shares.map(\.minorUnits), [334, 333, 333])
         XCTAssertEqual(shares.reduce(.zero, +), Money(10))
+    }
+
+    func testRecurringDisplayCleansOnlyGeneratedLegacyNotes() {
+        let child = Expense(amount: 100, category: "Housing", note: "Rent (Auto)", frequency: .monthly, isRecurringChild: true)
+        XCTAssertEqual(child.displayNote, "Rent")
+        XCTAssertEqual(child.note, "Rent (Auto)", "Displaying an old note must not mutate stored history")
+        child.note = "(Auto)"
+        XCTAssertEqual(child.displayNote, "")
+        child.note = "Rent"
+        XCTAssertEqual(child.displayNote, "Rent")
+        child.isRecurringChild = false
+        child.note = "Car (Auto)"
+        XCTAssertEqual(child.displayNote, "Car (Auto)", "Never strip a user's ordinary note")
+    }
+
+    func testSplitNoteDoesNotRepeatEqualShare() {
+        let note = SplitNote.quick(total: Money(115), share: Money(57.5), people: 2)
+        let amount = Money(57.5).amount.formatted(.currency(code: L10n.currencyCode))
+        XCTAssertEqual(note.components(separatedBy: amount).count - 1, 1)
+        XCTAssertTrue(note.contains("\n"))
+        XCTAssertTrue(note.contains(Money(115).amount.formatted(.currency(code: L10n.currencyCode))))
+    }
+
+    func testLegacySplitNoteDisplayRemovesOnlyExactRedundancy() {
+        let old = "Split: Total $115.00; my share $57.50. Each pays $57.50"
+        let expense = Expense(amount: 57.5, category: "Food", note: old)
+        XCTAssertEqual(expense.displayNote, "Split: Total $115.00\nMy share $57.50")
+        XCTAssertEqual(expense.note, old)
+        for note in ["Dinner. Each pays $57.50", old + " — paid cash", "Split: Total $10.00; my share $3.34. Each pays $3.33"] {
+            XCTAssertEqual(SplitNote.readableLegacyNote(note), note)
+        }
+        XCTAssertEqual(SplitNote.readableLegacyNote("AA分账: 总额US$115.00；我的份额 US$57.50。每人支付 US$57.50"),
+                       "AA分账: 总额US$115.00\n我的份额 US$57.50")
+    }
+
+    func testLongRecurringTransactionRendersAtAccessibilitySize() throws {
+        let expense = Expense(amount: 57.5, category: "Housing",
+                              note: "Split: Total $115.00; my share $57.50. Each pays $57.50 (Auto)",
+                              frequency: .monthly, isRecurringChild: true)
+        let renderer = ImageRenderer(content: ExpenseRowCard(expense: expense)
+            .frame(width: 375)
+            .background(Color(uiColor: .systemBackground))
+            .environment(\.dynamicTypeSize, .accessibility5)
+            .environment(\.colorScheme, .light))
+        renderer.proposedSize = ProposedViewSize(width: 375, height: nil)
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.uiImage)
+        XCTAssertGreaterThan(image.size.height, 200)
+        XCTAssertFalse(expense.displayNote.contains("(Auto)"))
+        XCTAssertFalse(expense.displayNote.contains("Each pays"))
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "Recurring note at largest text size"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    func testSharedItemBreakdownUsesExactAllocatedCentsAndOnlyAssignedItems() throws {
+        let session = SplitSession()
+        session.addPerson(name: "Friend")
+        session.addPerson(name: "Guest")
+        session.tipSelection = 0
+        session.addSharedItem(name: "Shared starter", price: 10)
+        session.addSharedItem(name: "Tea", price: 0.01)
+        session.sharedItems[1].involvedPersonIDs = [session.people[0].id, session.people[1].id]
+        for person in session.people {
+            let shares = session.sharedItemShares(for: person.id)
+            XCTAssertEqual(shares.reduce(Money.zero) { $0 + $1.share }, Money(session.sharedPortion(for: person.id)))
+        }
+        XCTAssertEqual(session.sharedItemShares(for: session.people[0].id).map { $0.share.minorUnits }, [334, 1])
+        XCTAssertEqual(session.sharedItemShares(for: session.people[1].id).map { $0.share.minorUnits }, [333, 0])
+        XCTAssertEqual(session.sharedItemShares(for: session.people[2].id).map(\.name), ["Shared starter"])
+        session.removePerson(id: session.people[0].id)
+        XCTAssertEqual(session.people.reduce(Money.zero) { $0 + Money(session.sharedPortion(for: $1.id)) }, Money(10.01))
+        XCTAssertEqual(session.sharedItemShares(for: UUID()).count, 0)
+    }
+
+    func testDetailedReceiptIncludesItemSharesAndOneCentTaxWithoutDoubleCounting() throws {
+        let session = SplitSession()
+        session.tipSelection = 0
+        session.addPerson(name: "Friend")
+        session.addPersonalItem(to: session.people[0].id, name: "Steak", price: 45)
+        session.addPersonalItem(to: session.people[1].id, name: "Fish", price: 25)
+        session.addSharedItem(name: "A shared starter with a deliberately long name", price: 6)
+        session.addSharedItem(name: "Tea 茶", price: 4)
+        session.taxAmount = 0.01
+        let receipt = session.makeReceiptData()
+        XCTAssertEqual(receipt.total, 80.01)
+        let details = receipt.items.filter { $0.style == .detail }
+        XCTAssertEqual(details.count, 4)
+        XCTAssertEqual(details.map(\.value), [.currency(3), .currency(2), .currency(3), .currency(2)])
+        XCTAssertTrue(details.allSatisfy { $0.subtitle == nil && $0.participants == session.people.map(\.name) })
+        XCTAssertEqual(receipt.items.filter { $0.style == .sharedSubtotal }.map(\.value), [.currency(5), .currency(5)])
+        XCTAssertTrue(receipt.items.contains { $0.style == .standard && $0.value == .currency(0.01) })
+        let totals = receipt.items.filter { $0.style == .personTotal }.reduce(Money.zero) { total, item in
+            guard case .currency(let amount) = item.value else { return total }
+            return total + Money(amount)
+        }
+        XCTAssertEqual(totals, Money(receipt.total))
+
+        let image = try XCTUnwrap(ReceiptImageExporter.image(data: receipt, scale: 2))
+        XCTAssertNotNil(image.pngData())
+        XCTAssertGreaterThan(image.size.height, 500)
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "Detailed shared receipt"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    func testSharedReceiptNamesFollowAssignmentsAndRenamesWithoutChangingShares() throws {
+        let session = SplitSession()
+        session.people[0].name = "Alex"
+        session.addPerson(name: "Alex")
+        session.addPerson(name: "Not involved")
+        session.tipSelection = 0
+        session.addSharedItem(name: "Tea", price: 0.01)
+        session.sharedItems[0].involvedPersonIDs = [session.people[1].id, UUID(), session.people[0].id, session.people[0].id]
+        var details = session.makeReceiptData().items.filter { $0.style == .detail }
+        XCTAssertEqual(details.map(\.participants), [["Alex", "Alex"], ["Alex", "Alex"]])
+        XCTAssertEqual(details.map(\.value), [.currency(0.01), .currency(0)])
+        session.people[1].name = "  Jamie  "
+        XCTAssertEqual(session.makeReceiptData().items.first { $0.style == .detail }?.participants, ["Alex", "Jamie"])
+        session.removePerson(id: session.people[0].id)
+        session.people[0].name = " \n "
+        details = session.makeReceiptData().items.filter { $0.style == .detail }
+        XCTAssertEqual(details.count, 1)
+        XCTAssertEqual(details[0].participants, [L10n.isZh ? "未命名" : "Guest"])
+        XCTAssertEqual(details[0].value, .currency(0.01))
+    }
+
+    func testApprovedSharedReceiptLayoutRendersShortLongAndMultipleNames() throws {
+        let session = SplitSession()
+        session.people[0].name = "Alex"
+        session.addPerson(name: "Jamie")
+        session.addPerson(name: "Alexandra Catherine Montgomery-Wellington")
+        session.tipSelection = 0
+        session.addSharedItem(name: "Starter", price: 6)
+        session.sharedItems[0].involvedPersonIDs = [session.people[0].id, session.people[1].id]
+        session.addSharedItem(name: "Jasmine tea 茉莉花茶 for the table", price: 12)
+        let receipt = session.makeReceiptData()
+        XCTAssertEqual(receipt.total, 18)
+        XCTAssertEqual(receipt.items.filter { $0.style == .sharedSubtotal }.map(\.value), [.currency(7), .currency(7), .currency(4)])
+        XCTAssertEqual(Array(receipt.items.filter { $0.style == .detail }.prefix(2)).map(\.value), [.currency(3), .currency(4)])
+        XCTAssertTrue(receipt.items.allSatisfy { $0.subtitle == nil })
+        let image = try XCTUnwrap(ReceiptImageExporter.image(data: receipt, scale: 2))
+        XCTAssertNotNil(image.pngData())
+        XCTAssertEqual(image.size.width, 375)
+        XCTAssertGreaterThan(image.size.height, 800)
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "Approved shared receipt - short long and multiple names"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        // Two long names must also fall back to the stacked layout, not truncate.
+        session.people[0].name = "Christopher Alexander Worthington-Smythe"
+        session.people[1].name = "王小明 Wang Xiaoming"
+        let largeImage = try XCTUnwrap(ReceiptImageExporter.image(data: session.makeReceiptData(), scale: 2,
+                                                                dynamicTypeSize: .accessibility3))
+        XCTAssertNotNil(largeImage.pngData())
+        XCTAssertGreaterThan(largeImage.size.height, image.size.height)
+        let largeAttachment = XCTAttachment(image: largeImage)
+        largeAttachment.name = "Shared receipt - long names and accessibility text"
+        largeAttachment.lifetime = .keepAlways
+        add(largeAttachment)
     }
 
     func testWeightedAllocationReconcilesToOriginalTotal() {
@@ -357,11 +537,39 @@ final class MoneyAndSplitTests: XCTestCase {
         XCTAssertEqual(expenses.first?.amount, 19)
     }
 
-    func testProductionConfigurationUsesTheExplicitPrivateCloudKitContainer() {
-        let production = LoveLedgerApp.modelConfiguration(isRunningUITests: false)
-        let testing = LoveLedgerApp.modelConfiguration(isRunningUITests: true)
+    func testBackupRejectsInvalidMoneySettingsBeforeChangingStoredData() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let existingID = UUID()
+        context.insert(Expense(id: existingID, amount: 19, category: "Food", note: "Keep me", date: Date()))
+        try context.save()
 
-        XCTAssertEqual(production.cloudKitContainerIdentifier, LoveLedgerApp.cloudKitContainerIdentifier)
+        let invalidSettings = BackupSettings(
+            isBudgetEnabled: true,
+            budgetAmount: 12.345,
+            alertThreshold: 10,
+            dailyNotify: false,
+            notifyTime: 0
+        )
+        let backup = AppBackup(expenses: [], categoryBudgets: [], settings: invalidSettings)
+
+        XCTAssertThrowsError(
+            try BackupRestorer.apply(
+                ImportedBackup(backup: backup, isLegacy: false),
+                mode: .replace,
+                in: context
+            )
+        )
+
+        let expenses = try context.fetch(FetchDescriptor<Expense>())
+        XCTAssertEqual(expenses.map(\.id), [existingID])
+    }
+
+    func testProductionConfigurationUsesTheExplicitPrivateCloudKitContainer() {
+        let production = DailySpendApp.modelConfiguration(isRunningUITests: false)
+        let testing = DailySpendApp.modelConfiguration(isRunningUITests: true)
+
+        XCTAssertEqual(production.cloudKitContainerIdentifier, DailySpendApp.cloudKitContainerIdentifier)
         XCTAssertNil(testing.cloudKitContainerIdentifier)
         XCTAssertTrue(testing.isStoredInMemoryOnly)
     }

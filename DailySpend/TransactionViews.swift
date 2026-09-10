@@ -159,7 +159,10 @@ struct AddExpenseView: View {
             }
             .padding()
             Divider()
-            TextField(L10n.notePlaceholder, text: $note).padding()
+            TextField(L10n.notePlaceholder, text: $note, axis: .vertical)
+                .lineLimit(2...6)
+                .accessibilityIdentifier("expense-note")
+                .padding()
         }.background(cardBackground).cornerRadius(16).padding(.horizontal)
     }
     
@@ -221,7 +224,7 @@ struct EditExpenseView: View {
         self.themeColor = themeColor
         _amount = State(initialValue: expense.normalizedAmount)
         _category = State(initialValue: expense.category)
-        _note = State(initialValue: expense.note)
+        _note = State(initialValue: expense.displayNote)
         _date = State(initialValue: expense.date)
         _frequency = State(initialValue: expense.safeFrequency)
     }
@@ -318,7 +321,10 @@ struct EditExpenseView: View {
             }
             .padding()
             Divider()
-            TextField(L10n.notePlaceholder, text: $note).padding()
+            TextField(L10n.notePlaceholder, text: $note, axis: .vertical)
+                .lineLimit(2...6)
+                .accessibilityIdentifier("expense-note")
+                .padding()
         }.background(cardBackground).cornerRadius(16).padding(.horizontal)
     }
     

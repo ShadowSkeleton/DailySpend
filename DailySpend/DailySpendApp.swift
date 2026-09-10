@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct LoveLedgerApp: App {
+struct DailySpendApp: App {
     static let cloudKitContainerIdentifier = "iCloud.com.jackson.LoveLedger"
     static let cloudKitStoreFallbackKey = "cloudKitStoreFallback"
 
@@ -133,7 +133,7 @@ struct RecurrenceHandler: View {
                     amount: expense.normalizedAmount,
                     amountMinorUnits: expense.money.minorUnits,
                     category: expense.category,
-                    note: expense.note.isEmpty ? "(Auto)" : "\(expense.note) (Auto)",
+                    note: expense.note,
                     date: nextDate,
                     // ✨ 关键变更：
                     // 现在我们继承母本的 frequency，这样 UI 就会显示 Recurring 图标了！
@@ -163,6 +163,10 @@ struct RecurrenceHandler: View {
                     print("⏳ DailySpend will continue catching up recurring expenses on a future launch.")
                 }
             } catch {
+                // Discard inserted children and cursor changes together. This
+                // keeps the in-memory context aligned with the last durable
+                // store state before a later foreground retry.
+                modelContext.rollback()
                 print("❌ Failed to save: \(error)")
             }
         }

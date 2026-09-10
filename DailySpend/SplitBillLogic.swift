@@ -25,8 +25,12 @@ enum ReceiptValueType: Equatable {
 // MARK: - Receipt Item (NEW)
 
 struct ReceiptItem: Equatable {
+    enum Style: Equatable { case standard, sharedSubtotal, detail, personTotal }
     let label: String
     let value: ReceiptValueType
+    var style: Style = .standard
+    var subtitle: String? = nil
+    var participants: [String] = []
     
     // Convenience initializers
     static func currency(_ label: String, _ amount: Double) -> ReceiptItem {
@@ -40,6 +44,42 @@ struct ReceiptItem: Equatable {
     static func text(_ label: String, _ text: String) -> ReceiptItem {
         ReceiptItem(label: label, value: .text(text))
     }
+}
+
+nonisolated enum SplitNote {
+    /// Recognize only the exact old generated equal-share templates. Arbitrary
+    /// user text and unequal allocations stay verbatim; storage is untouched.
+    static func readableLegacyNote(_ note: String) -> String {
+        for (prefix, divider, repeated, heading) in [
+            ("Split: Total ", "; my share ", ". Each pays ", "My share "),
+            ("AA分账: 总额", "；我的份额 ", "。每人支付 ", "我的份额 ")
+        ] {
+            guard note.hasPrefix(prefix) else { continue }
+            let parts = note.components(separatedBy: repeated)
+            guard parts.count == 2 else { continue }
+            let summary = parts[0].components(separatedBy: divider)
+            guard summary.count == 2, summary[1] == parts[1], !summary[1].isEmpty else { continue }
+            return "\(summary[0])\n\(heading)\(summary[1])"
+        }
+        return note
+    }
+
+    static func quick(total: Money, share: Money, people: Int) -> String {
+        let totalText = total.amount.formatted(.currency(code: L10n.currencyCode))
+        let shareText = share.amount.formatted(.currency(code: L10n.currencyCode))
+        return L10n.isZh
+            ? "\(people) 人分账 · 总额 \(totalText)\n我的份额 \(shareText)"
+            : "Split · \(people) \(people == 1 ? "person" : "people") · Total \(totalText)\nMy share \(shareText)"
+    }
+}
+
+nonisolated struct SharedItemShare: Identifiable {
+    let id: UUID
+    let name: String
+    let total: Money
+    let share: Money
+    let peopleCount: Int
+    let participantNames: [String]
 }
 
 // MARK: - Shared Models
@@ -67,7 +107,11 @@ struct SharedItem: Identifiable, Equatable, Codable {
     var involvedPersonIDs: [UUID]
 }
 
-class SplitPerson: Identifiable, ObservableObject {
+// These are UI-facing state containers, but their values and calculation
+// helpers don't require actor isolation. Opting them out of the project's
+// default MainActor isolation also avoids an iOS 26.3 runtime crash while
+// tearing down @Published child objects in unit tests.
+nonisolated class SplitPerson: Identifiable, ObservableObject {
     let id = UUID()
     @Published var name: String
     @Published var items: [BasketItem] = []
@@ -86,7 +130,7 @@ class SplitPerson: Identifiable, ObservableObject {
 
 // MARK: - The Session Logic Engine
 
-class SplitSession: ObservableObject {
+nonisolated class SplitSession: ObservableObject {
     @Published var people: [SplitPerson] = []
     @Published var sharedItems: [SharedItem] = []
     @Published var taxAmount: Double?
@@ -199,13 +243,19 @@ class SplitSession: ObservableObject {
         people.count > 1
     }
 
-    private func sharedPortionMoney(for personID: UUID) -> Money {
-        sharedItems.reduce(.zero) { result, item in
+    func sharedItemShares(for personID: UUID) -> [SharedItemShare] {
+        sharedItems.compactMap { item in
             let recipients = peopleIncluded(in: item)
-            guard let index = recipients.firstIndex(where: { $0.id == personID }) else { return result }
+            guard let index = recipients.firstIndex(where: { $0.id == personID }) else { return nil }
             let allocation = Money.splitEvenly(money(item.price), among: recipients.count)
-            return result + allocation[index]
+            return SharedItemShare(id: item.id, name: item.name, total: money(item.price),
+                                   share: allocation[index], peopleCount: recipients.count,
+                                   participantNames: recipients.map(\.name))
         }
+    }
+
+    private func sharedPortionMoney(for personID: UUID) -> Money {
+        sharedItemShares(for: personID).reduce(.zero) { $0 + $1.share }
     }
 
     func sharedPortion(for personID: UUID) -> Double {
@@ -285,8 +335,8 @@ class SplitSession: ObservableObject {
         let allItems = personalNames + sharedNames
         let itemsStr = allItems.joined(separator: ", ")
         
-        let base = subtotal(for: person)
-        return "Split: \(itemsStr.isEmpty ? "Items" : itemsStr) (\(String(format: "%.2f", base)) + tax/tip)"
+        let summary = SplitNote.quick(total: Money(grandTotal), share: Money(finalTotal(for: person)), people: people.count)
+        return itemsStr.isEmpty ? summary : "\(summary)\n\(itemsStr)"
     }
     
     func reset() {
@@ -297,5 +347,45 @@ class SplitSession: ObservableObject {
         tipSelection = 15
         customTipPercentage = nil
         customFixedTip = nil
+    }
+}
+
+extension SplitSession {
+    @MainActor
+    func makeReceiptData() -> ReceiptData {
+        func displayName(_ name: String) -> String {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? (L10n.isZh ? "未命名" : "Guest") : trimmed
+        }
+        var rows: [ReceiptItem] = []
+        for person in people {
+            let name = displayName(person.name)
+            rows.append(.text(name, ""))
+            for item in person.items {
+                rows.append(.currency(item.name.isEmpty ? (L10n.isZh ? "个人项目" : "Personal item") : item.name, item.price))
+            }
+            let shares = sharedItemShares(for: person.id)
+            if !shares.isEmpty {
+                rows.append(ReceiptItem(label: L10n.isZh ? "共享分摊" : "Shared portion",
+                                        value: .currency(sharedPortion(for: person.id)),
+                                        style: .sharedSubtotal))
+                for item in shares {
+                    rows.append(ReceiptItem(
+                        label: item.name.isEmpty ? (L10n.isZh ? "共享项目" : "Shared item") : item.name,
+                        value: .currency(item.share.amount), style: .detail,
+                        participants: item.participantNames.map(displayName)))
+                }
+            }
+            let final = Money(finalTotal(for: person))
+            let extras = final - Money(subtotal(for: person))
+            if extras > .zero {
+                rows.append(.currency(L10n.isZh ? "税费与小费" : "Tax & tip", extras.amount))
+            }
+            rows.append(ReceiptItem(label: L10n.isZh ? "个人总计" : "Person total",
+                                    value: .currency(final.amount), style: .personTotal))
+        }
+        return ReceiptData(title: L10n.isZh ? "按人分配" : "Split by Person", items: rows,
+                           subtotal: sessionSubtotal, tax: totalTaxAmount, tip: totalTipAmount,
+                           total: grandTotal, footer: "Generated by DailySpend")
     }
 }

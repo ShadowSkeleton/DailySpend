@@ -5,11 +5,32 @@ import CoreTransferable
 
 // MARK: - CSV & JSON
 struct CSVDocument: FileDocument, Transferable {
+    static func row(_ fields: [String]) -> String {
+        fields.map { field in
+            // Quoting alone does not prevent spreadsheet formula execution.
+            let first = field.trimmingCharacters(in: .whitespacesAndNewlines).first
+            let needsTextPrefix = first.map { "=+-@".contains($0) } ?? false
+            let text = (needsTextPrefix ? "'" : "") + field
+            return "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }.joined(separator: ",") + "\r\n"
+    }
+
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
     var text: String; init(text: String) { self.text = text }
     init(configuration: ReadConfiguration) throws { guard let data = configuration.file.regularFileContents, let string = String(data: data, encoding: .utf8) else { throw CocoaError(.fileReadCorruptFile) }; text = string }
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { let data = text.data(using: .utf8)!; return FileWrapper(regularFileWithContents: data) }
-    static var transferRepresentation: some TransferRepresentation { DataRepresentation(contentType: .commaSeparatedText) { document in document.text.data(using: .utf8)! } importing: { data in CSVDocument(text: String(data: data, encoding: .utf8)!) } }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(contentType: .commaSeparatedText) { document in
+            Data(document.text.utf8)
+        } importing: { data in
+            guard let text = String(data: data, encoding: .utf8) else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            return CSVDocument(text: text)
+        }
+    }
 }
 
 struct JSONBackupDocument: FileDocument {
@@ -232,10 +253,8 @@ enum BackupRestorer {
         }
 
         if let settings = backup.settings {
-            guard settings.budgetAmount.isFinite,
-                  settings.budgetAmount >= 0,
-                  settings.alertThreshold.isFinite,
-                  settings.alertThreshold >= 0,
+            guard (settings.budgetAmount == 0 || ExpenseInputValidator.isValidAmount(settings.budgetAmount)),
+                  (settings.alertThreshold == 0 || ExpenseInputValidator.isValidAmount(settings.alertThreshold)),
                   settings.notifyTime.isFinite,
                   settings.notifyTime >= 0 else {
                 throw CocoaError(.fileReadCorruptFile)

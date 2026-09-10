@@ -7,9 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4E2026090400000000000001 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2026090400000000000002 /* WidgetSnapshot.swift */; };
 		4EE9D1D92EE3925F009C1BE8 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4EE9D1D82EE3925F009C1BE8 /* WidgetKit.framework */; };
 		4EE9D1DB2EE3925F009C1BE8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4EE9D1DA2EE3925F009C1BE8 /* SwiftUI.framework */; };
-		4EE9D1EA2EE39260009C1BE8 /* LoveLedgerWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4EE9D1D62EE3925F009C1BE8 /* LoveLedgerWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4EE9D1EA2EE39260009C1BE8 /* DailySpendWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4EE9D1D62EE3925F009C1BE8 /* DailySpendWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -18,21 +19,21 @@
 			containerPortal = 4E9118B02EE29C0500B4AC63 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 4E9118B72EE29C0500B4AC63;
-			remoteInfo = LoveLedger;
+			remoteInfo = DailySpend;
 		};
 		4E0000162FF0000100C0D001 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4E9118B02EE29C0500B4AC63 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 4E9118B72EE29C0500B4AC63;
-			remoteInfo = LoveLedger;
+			remoteInfo = DailySpend;
 		};
 		4EE9D1E82EE39260009C1BE8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4E9118B02EE29C0500B4AC63 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 4EE9D1D52EE3925F009C1BE8;
-			remoteInfo = LoveLedgerWidgetExtension;
+			remoteInfo = DailySpendWidgetExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -43,7 +44,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				4EE9D1EA2EE39260009C1BE8 /* LoveLedgerWidgetExtension.appex in Embed Foundation Extensions */,
+				4EE9D1EA2EE39260009C1BE8 /* DailySpendWidgetExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -51,29 +52,30 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		4E0000012FF0000100C0D001 /* LoveLedgerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoveLedgerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		4E0000112FF0000100C0D001 /* LoveLedgerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoveLedgerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		4E9118B82EE29C0500B4AC63 /* LoveLedger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LoveLedger.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4E2026090400000000000002 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySpend/WidgetSnapshot.swift; sourceTree = SOURCE_ROOT; };
+		4E0000012FF0000100C0D001 /* DailySpendTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DailySpendTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4E0000112FF0000100C0D001 /* DailySpendUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DailySpendUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4E9118B82EE29C0500B4AC63 /* DailySpend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DailySpend.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4ECD1A802EE7ABCA0003A2A6 /* DailySpendWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DailySpendWidgetExtension.entitlements; sourceTree = "<group>"; };
-		4EE9D1D62EE3925F009C1BE8 /* LoveLedgerWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LoveLedgerWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4EE9D1D62EE3925F009C1BE8 /* DailySpendWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DailySpendWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EE9D1D82EE3925F009C1BE8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		4EE9D1DA2EE3925F009C1BE8 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		4EE9D1EE2EE39260009C1BE8 /* Exceptions for "DailySpendWidget" folder in "LoveLedgerWidgetExtension" target */ = {
+		4EE9D1EE2EE39260009C1BE8 /* Exceptions for "DailySpendWidget" folder in "DailySpendWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 4EE9D1D52EE3925F009C1BE8 /* LoveLedgerWidgetExtension */;
+			target = 4EE9D1D52EE3925F009C1BE8 /* DailySpendWidgetExtension */;
 		};
-		4EE9D1F12EE3929B009C1BE8 /* Exceptions for "DailySpend" folder in "LoveLedger" target */ = {
+		4EE9D1F12EE3929B009C1BE8 /* Exceptions for "DailySpend" folder in "DailySpend" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 4E9118B72EE29C0500B4AC63 /* LoveLedger */;
+			target = 4E9118B72EE29C0500B4AC63 /* DailySpend */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -91,7 +93,7 @@
 		4E9118BA2EE29C0500B4AC63 /* DailySpend */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				4EE9D1F12EE3929B009C1BE8 /* Exceptions for "DailySpend" folder in "LoveLedger" target */,
+				4EE9D1F12EE3929B009C1BE8 /* Exceptions for "DailySpend" folder in "DailySpend" target */,
 			);
 			path = DailySpend;
 			sourceTree = "<group>";
@@ -99,7 +101,7 @@
 		4EE9D1DC2EE3925F009C1BE8 /* DailySpendWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				4EE9D1EE2EE39260009C1BE8 /* Exceptions for "DailySpendWidget" folder in "LoveLedgerWidgetExtension" target */,
+				4EE9D1EE2EE39260009C1BE8 /* Exceptions for "DailySpendWidget" folder in "DailySpendWidgetExtension" target */,
 			);
 			path = DailySpendWidget;
 			sourceTree = "<group>";
@@ -143,6 +145,7 @@
 		4E9118AF2EE29C0500B4AC63 = {
 			isa = PBXGroup;
 			children = (
+				4E2026090400000000000002 /* WidgetSnapshot.swift */,
 				4ECD1A802EE7ABCA0003A2A6 /* DailySpendWidgetExtension.entitlements */,
 				4E9118BA2EE29C0500B4AC63 /* DailySpend */,
 				4EE9D1DC2EE3925F009C1BE8 /* DailySpendWidget */,
@@ -156,10 +159,10 @@
 		4E9118B92EE29C0500B4AC63 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4E9118B82EE29C0500B4AC63 /* LoveLedger.app */,
-				4EE9D1D62EE3925F009C1BE8 /* LoveLedgerWidgetExtension.appex */,
-				4E0000012FF0000100C0D001 /* LoveLedgerTests.xctest */,
-				4E0000112FF0000100C0D001 /* LoveLedgerUITests.xctest */,
+				4E9118B82EE29C0500B4AC63 /* DailySpend.app */,
+				4EE9D1D62EE3925F009C1BE8 /* DailySpendWidgetExtension.appex */,
+				4E0000012FF0000100C0D001 /* DailySpendTests.xctest */,
+				4E0000112FF0000100C0D001 /* DailySpendUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -176,9 +179,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		4E0000052FF0000100C0D001 /* LoveLedgerTests */ = {
+		4E0000052FF0000100C0D001 /* DailySpendTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4E00000A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "LoveLedgerTests" */;
+			buildConfigurationList = 4E00000A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "DailySpendTests" */;
 			buildPhases = (
 				4E0000042FF0000100C0D001 /* Sources */,
 				4E0000032FF0000100C0D001 /* Frameworks */,
@@ -191,16 +194,16 @@
 			fileSystemSynchronizedGroups = (
 				4E0000022FF0000100C0D001 /* DailySpendTests */,
 			);
-			name = LoveLedgerTests;
+			name = DailySpendTests;
 			packageProductDependencies = (
 			);
-			productName = LoveLedgerTests;
-			productReference = 4E0000012FF0000100C0D001 /* LoveLedgerTests.xctest */;
+			productName = DailySpendTests;
+			productReference = 4E0000012FF0000100C0D001 /* DailySpendTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		4E0000152FF0000100C0D001 /* LoveLedgerUITests */ = {
+		4E0000152FF0000100C0D001 /* DailySpendUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4E00001A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "LoveLedgerUITests" */;
+			buildConfigurationList = 4E00001A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "DailySpendUITests" */;
 			buildPhases = (
 				4E0000142FF0000100C0D001 /* Sources */,
 				4E0000132FF0000100C0D001 /* Frameworks */,
@@ -213,16 +216,16 @@
 			fileSystemSynchronizedGroups = (
 				4E0000122FF0000100C0D001 /* DailySpendUITests */,
 			);
-			name = LoveLedgerUITests;
+			name = DailySpendUITests;
 			packageProductDependencies = (
 			);
-			productName = LoveLedgerUITests;
-			productReference = 4E0000112FF0000100C0D001 /* LoveLedgerUITests.xctest */;
+			productName = DailySpendUITests;
+			productReference = 4E0000112FF0000100C0D001 /* DailySpendUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		4E9118B72EE29C0500B4AC63 /* LoveLedger */ = {
+		4E9118B72EE29C0500B4AC63 /* DailySpend */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4E9118C52EE29C0600B4AC63 /* Build configuration list for PBXNativeTarget "LoveLedger" */;
+			buildConfigurationList = 4E9118C52EE29C0600B4AC63 /* Build configuration list for PBXNativeTarget "DailySpend" */;
 			buildPhases = (
 				4E9118B42EE29C0500B4AC63 /* Sources */,
 				4E9118B52EE29C0500B4AC63 /* Frameworks */,
@@ -237,16 +240,16 @@
 			fileSystemSynchronizedGroups = (
 				4E9118BA2EE29C0500B4AC63 /* DailySpend */,
 			);
-			name = LoveLedger;
+			name = DailySpend;
 			packageProductDependencies = (
 			);
-			productName = LoveLedger;
-			productReference = 4E9118B82EE29C0500B4AC63 /* LoveLedger.app */;
+			productName = DailySpend;
+			productReference = 4E9118B82EE29C0500B4AC63 /* DailySpend.app */;
 			productType = "com.apple.product-type.application";
 		};
-		4EE9D1D52EE3925F009C1BE8 /* LoveLedgerWidgetExtension */ = {
+		4EE9D1D52EE3925F009C1BE8 /* DailySpendWidgetExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4EE9D1EF2EE39260009C1BE8 /* Build configuration list for PBXNativeTarget "LoveLedgerWidgetExtension" */;
+			buildConfigurationList = 4EE9D1EF2EE39260009C1BE8 /* Build configuration list for PBXNativeTarget "DailySpendWidgetExtension" */;
 			buildPhases = (
 				4EE9D1D22EE3925F009C1BE8 /* Sources */,
 				4EE9D1D32EE3925F009C1BE8 /* Frameworks */,
@@ -259,11 +262,11 @@
 			fileSystemSynchronizedGroups = (
 				4EE9D1DC2EE3925F009C1BE8 /* DailySpendWidget */,
 			);
-			name = LoveLedgerWidgetExtension;
+			name = DailySpendWidgetExtension;
 			packageProductDependencies = (
 			);
-			productName = LoveLedgerWidgetExtension;
-			productReference = 4EE9D1D62EE3925F009C1BE8 /* LoveLedgerWidgetExtension.appex */;
+			productName = DailySpendWidgetExtension;
+			productReference = 4EE9D1D62EE3925F009C1BE8 /* DailySpendWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -292,7 +295,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 4E9118B32EE29C0500B4AC63 /* Build configuration list for PBXProject "LoveLedger" */;
+			buildConfigurationList = 4E9118B32EE29C0500B4AC63 /* Build configuration list for PBXProject "DailySpend" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -307,10 +310,10 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				4E9118B72EE29C0500B4AC63 /* LoveLedger */,
-				4EE9D1D52EE3925F009C1BE8 /* LoveLedgerWidgetExtension */,
-				4E0000052FF0000100C0D001 /* LoveLedgerTests */,
-				4E0000152FF0000100C0D001 /* LoveLedgerUITests */,
+				4E9118B72EE29C0500B4AC63 /* DailySpend */,
+				4EE9D1D52EE3925F009C1BE8 /* DailySpendWidgetExtension */,
+				4E0000052FF0000100C0D001 /* DailySpendTests */,
+				4E0000152FF0000100C0D001 /* DailySpendUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -358,6 +361,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4E2026090400000000000001 /* WidgetSnapshot.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,17 +370,17 @@
 /* Begin PBXTargetDependency section */
 		4E0000072FF0000100C0D001 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 4E9118B72EE29C0500B4AC63 /* LoveLedger */;
+			target = 4E9118B72EE29C0500B4AC63 /* DailySpend */;
 			targetProxy = 4E0000062FF0000100C0D001 /* PBXContainerItemProxy */;
 		};
 		4E0000172FF0000100C0D001 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 4E9118B72EE29C0500B4AC63 /* LoveLedger */;
+			target = 4E9118B72EE29C0500B4AC63 /* DailySpend */;
 			targetProxy = 4E0000162FF0000100C0D001 /* PBXContainerItemProxy */;
 		};
 		4EE9D1E92EE39260009C1BE8 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 4EE9D1D52EE3925F009C1BE8 /* LoveLedgerWidgetExtension */;
+			target = 4EE9D1D52EE3925F009C1BE8 /* DailySpendWidgetExtension */;
 			targetProxy = 4EE9D1E82EE39260009C1BE8 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -387,12 +391,12 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.LoveLedgerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.DailySpendTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LoveLedger.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LoveLedger";
-				TEST_TARGET_NAME = LoveLedger;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DailySpend.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DailySpend";
+				TEST_TARGET_NAME = DailySpend;
 			};
 			name = Debug;
 		};
@@ -401,12 +405,12 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.LoveLedgerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.DailySpendTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LoveLedger.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LoveLedger";
-				TEST_TARGET_NAME = LoveLedger;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DailySpend.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DailySpend";
+				TEST_TARGET_NAME = DailySpend;
 			};
 			name = Release;
 		};
@@ -414,11 +418,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.LoveLedgerUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.DailySpendUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = LoveLedger;
+				TEST_TARGET_NAME = DailySpend;
 			};
 			name = Debug;
 		};
@@ -426,11 +430,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.LoveLedgerUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jackson.DailySpendUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = LoveLedger;
+				TEST_TARGET_NAME = DailySpend;
 			};
 			name = Release;
 		};
@@ -566,7 +570,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = DailySpend/DailySpend.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -601,7 +605,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = DailySpend/DailySpend.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -636,11 +640,11 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DailySpendWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DailySpendWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = LoveLedgerWidget;
+				INFOPLIST_KEY_CFBundleDisplayName = DailySpend;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -667,11 +671,11 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DailySpendWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DailySpendWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = LoveLedgerWidget;
+				INFOPLIST_KEY_CFBundleDisplayName = DailySpend;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -694,7 +698,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		4E00000A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "LoveLedgerTests" */ = {
+		4E00000A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "DailySpendTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4E0000082FF0000100C0D001 /* Debug */,
@@ -703,7 +707,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4E00001A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "LoveLedgerUITests" */ = {
+		4E00001A2FF0000100C0D001 /* Build configuration list for PBXNativeTarget "DailySpendUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4E0000182FF0000100C0D001 /* Debug */,
@@ -712,7 +716,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4E9118B32EE29C0500B4AC63 /* Build configuration list for PBXProject "LoveLedger" */ = {
+		4E9118B32EE29C0500B4AC63 /* Build configuration list for PBXProject "DailySpend" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4E9118C32EE29C0600B4AC63 /* Debug */,
@@ -721,7 +725,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4E9118C52EE29C0600B4AC63 /* Build configuration list for PBXNativeTarget "LoveLedger" */ = {
+		4E9118C52EE29C0600B4AC63 /* Build configuration list for PBXNativeTarget "DailySpend" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4E9118C62EE29C0600B4AC63 /* Debug */,
@@ -730,7 +734,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4EE9D1EF2EE39260009C1BE8 /* Build configuration list for PBXNativeTarget "LoveLedgerWidgetExtension" */ = {
+		4EE9D1EF2EE39260009C1BE8 /* Build configuration list for PBXNativeTarget "DailySpendWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4EE9D1EC2EE39260009C1BE8 /* Debug */,

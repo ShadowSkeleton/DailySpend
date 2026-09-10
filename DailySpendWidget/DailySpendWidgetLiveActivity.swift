@@ -1,6 +1,6 @@
 //
-//  LoveLedgerWidgetLiveActivity.swift
-//  LoveLedgerWidget
+//  DailySpendWidgetLiveActivity.swift
+//  DailySpendWidget
 //
 //  Created by Jackson Feng on 12/5/25.
 //
@@ -9,7 +9,7 @@ import ActivityKit
 import WidgetKit
 import SwiftUI
 
-struct LoveLedgerWidgetAttributes: ActivityAttributes {
+struct DailySpendWidgetAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         // Dynamic stateful properties about your activity go here!
         var emoji: String
@@ -19,9 +19,9 @@ struct LoveLedgerWidgetAttributes: ActivityAttributes {
     var name: String
 }
 
-struct LoveLedgerWidgetLiveActivity: Widget {
+struct DailySpendWidgetLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: LoveLedgerWidgetAttributes.self) { context in
+        ActivityConfiguration(for: DailySpendWidgetAttributes.self) { context in
             // Lock screen/banner UI goes here
             VStack {
                 Text("Hello \(context.state.emoji)")
@@ -50,31 +50,30 @@ struct LoveLedgerWidgetLiveActivity: Widget {
             } minimal: {
                 Text(context.state.emoji)
             }
-            .widgetURL(URL(string: "http://www.apple.com"))
             .keylineTint(Color.red)
         }
     }
 }
 
-extension LoveLedgerWidgetAttributes {
-    fileprivate static var preview: LoveLedgerWidgetAttributes {
-        LoveLedgerWidgetAttributes(name: "World")
+extension DailySpendWidgetAttributes {
+    fileprivate static var preview: DailySpendWidgetAttributes {
+        DailySpendWidgetAttributes(name: "World")
     }
 }
 
-extension LoveLedgerWidgetAttributes.ContentState {
-    fileprivate static var smiley: LoveLedgerWidgetAttributes.ContentState {
-        LoveLedgerWidgetAttributes.ContentState(emoji: "😀")
+extension DailySpendWidgetAttributes.ContentState {
+    fileprivate static var smiley: DailySpendWidgetAttributes.ContentState {
+        DailySpendWidgetAttributes.ContentState(emoji: "😀")
      }
      
-     fileprivate static var starEyes: LoveLedgerWidgetAttributes.ContentState {
-         LoveLedgerWidgetAttributes.ContentState(emoji: "🤩")
+     fileprivate static var starEyes: DailySpendWidgetAttributes.ContentState {
+         DailySpendWidgetAttributes.ContentState(emoji: "🤩")
      }
 }
 
-#Preview("Notification", as: .content, using: LoveLedgerWidgetAttributes.preview) {
-   LoveLedgerWidgetLiveActivity()
+#Preview("Notification", as: .content, using: DailySpendWidgetAttributes.preview) {
+   DailySpendWidgetLiveActivity()
 } contentStates: {
-    LoveLedgerWidgetAttributes.ContentState.smiley
-    LoveLedgerWidgetAttributes.ContentState.starEyes
+    DailySpendWidgetAttributes.ContentState.smiley
+    DailySpendWidgetAttributes.ContentState.starEyes
 }

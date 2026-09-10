@@ -17,6 +17,7 @@ struct ContentView: View {
     
     // Tab 选中状态管理
     @State private var selectedTab = 0
+    @State private var pendingQuickAdd = false
     @State private var syncTask: Task<Void, Never>? = nil
     @State private var isLocked = true
     @State private var isAuthenticating = false
@@ -33,7 +34,8 @@ struct ContentView: View {
             // 1. 首页
             HomeView(themeColor: themeColor, onOpenSplitBill: {
                 withAnimation(.snappy) { selectedTab = 1 }
-            })
+            }, pendingQuickAdd: $pendingQuickAdd,
+               canOpenQuickAdd: selectedTab == 0 && scenePhase == .active && (!isAppLockEnabled || !isLocked))
                 .tabItem { Label(L10n.home, systemImage: "house.fill") }
                 .tag(0)
             
@@ -74,18 +76,20 @@ struct ContentView: View {
         // Never leave transaction content visible in the app switcher. If a
         // person chooses App Lock, require their device authentication again
         // whenever DailySpend becomes active.
-        .overlay {
-            if scenePhase != .active {
-                PrivacyShieldView()
-            } else if isAppLockEnabled && isLocked {
-                AppLockView(
-                    themeColor: themeColor,
-                    isAuthenticating: isAuthenticating,
-                    errorMessage: unlockErrorMessage,
-                    canDisableAppLock: canDisableAppLock,
-                    unlock: unlockIfNeeded,
-                    disableAppLock: disableAppLock
-                )
+        .background {
+            SceneProtectionWindow(isPresented: scenePhase != .active || (isAppLockEnabled && isLocked)) {
+                if scenePhase != .active {
+                    PrivacyShieldView()
+                } else {
+                    AppLockView(
+                        themeColor: themeColor,
+                        isAuthenticating: isAuthenticating,
+                        errorMessage: unlockErrorMessage,
+                        canDisableAppLock: canDisableAppLock,
+                        unlock: unlockIfNeeded,
+                        disableAppLock: disableAppLock
+                    )
+                }
             }
         }
         .onAppear {
@@ -93,7 +97,7 @@ struct ContentView: View {
             updateNotifications()
             unlockIfNeeded()
         }
-        .onChange(of: expenses) { _, _ in
+        .onChange(of: expenseWidgetValues) { _, _ in
             performDebouncedSync()
             updateNotifications()
         }
@@ -109,6 +113,7 @@ struct ContentView: View {
         .onChange(of: notifyTime) { _, _ in updateNotifications() }
         .onChange(of: dailyNotify) { _, _ in updateNotifications() }
         .onChange(of: isAppLockEnabled) { _, isEnabled in
+            syncWidgetNow()
             isLocked = isEnabled
             unlockErrorMessage = nil
             canDisableAppLock = false
@@ -116,9 +121,18 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                syncWidgetNow()
                 unlockIfNeeded()
-            } else if isAppLockEnabled {
-                isLocked = true
+            } else {
+                syncWidgetNow()
+                if isAppLockEnabled { isLocked = true }
+            }
+        }
+        .onOpenURL { url in
+            guard url.scheme == "dailyspend" else { return }
+            if url.host == "home" || url.host == "add" {
+                withAnimation(.snappy) { selectedTab = 0 }
+                if url.host == "add" { pendingQuickAdd = true }
             }
         }
     }
@@ -136,8 +150,20 @@ struct ContentView: View {
         syncTask = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             if Task.isCancelled { return }
-            WidgetDataService.saveToWidget(expenses: expenses, budget: budgetAmount, isBudgetEnabled: isBudgetEnabled)
+            syncWidgetNow()
         }
+    }
+
+    // Observe field values, not just SwiftData object identities: editing an
+    // existing expense must refresh the widget as reliably as inserting one.
+    private var expenseWidgetValues: [ExpenseWidgetValue] {
+        expenses.map { ExpenseWidgetValue(id: $0.id, date: $0.date, cents: $0.money.minorUnits) }
+    }
+
+    private func syncWidgetNow() {
+        syncTask?.cancel()
+        WidgetDataService.saveToWidget(expenses: expenses, budget: budgetAmount,
+                                      isBudgetEnabled: isBudgetEnabled, hidesAmounts: isAppLockEnabled)
     }
     
     private func updateNotifications() {
@@ -198,6 +224,12 @@ struct ContentView: View {
         unlockErrorMessage = nil
         canDisableAppLock = false
     }
+}
+
+private struct ExpenseWidgetValue: Equatable {
+    let id: UUID
+    let date: Date
+    let cents: Int64
 }
 
 private struct PrivacyShieldView: View {

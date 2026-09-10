@@ -4,6 +4,10 @@
 # General
 .DS_Store
 .audit/
+# Local QA artifacts may contain machine paths and test captures.
+/audit/
+/design-qa.md
+*.xcresult/
 .AppleDouble
 .LSOverride
 # Icon must end with two \r
@@ -109,3 +113,13 @@ xcuserdata
 /*.gcno
 **/xcshareddata/WorkspaceSettings.xcsettings
 # End of https://www.toptal.com/developers/gitignore/api/macos,swiftpackagemanager,swift,xcode
+
+# Keep the runnable shared DailySpend scheme in source control. A parent
+# *.xcodeproj exclusion otherwise prevents the earlier child exceptions working.
+!DailySpend.xcodeproj/
+!DailySpend.xcodeproj/project.pbxproj
+!DailySpend.xcodeproj/xcshareddata/
+!DailySpend.xcodeproj/xcshareddata/xcschemes/
+!DailySpend.xcodeproj/xcshareddata/xcschemes/*.xcscheme
+!DailySpend.xcodeproj/project.xcworkspace/
+!DailySpend.xcodeproj/project.xcworkspace/contents.xcworkspacedata

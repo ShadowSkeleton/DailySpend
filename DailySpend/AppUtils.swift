@@ -86,10 +86,20 @@ struct RecurrenceEngine {
 
 // MARK: - Widget Data Service
 struct WidgetDataService {
-    static let appGroup = "group.com.jackson.LoveLedger"
-    static func saveToWidget(expenses: [Expense], budget: Double, isBudgetEnabled: Bool) {
-        let calendar = Calendar.current
-        let now = Date()
+    static func saveToWidget(expenses: [Expense], budget: Double, isBudgetEnabled: Bool, hidesAmounts: Bool) {
+        guard !DailySpendApp.isRunningAutomatedTests,
+              let store = UserDefaults(suiteName: WidgetSnapshot.appGroup) else { return }
+        let snapshot = makeSnapshot(expenses: expenses, budget: budget, isBudgetEnabled: isBudgetEnabled, hidesAmounts: hidesAmounts)
+        if snapshot.save(to: store) { WidgetCenter.shared.reloadAllTimelines() }
+    }
+
+    static func makeSnapshot(expenses: [Expense], budget: Double, isBudgetEnabled: Bool,
+                             hidesAmounts: Bool, now: Date = Date(), calendar: Calendar = .current) -> WidgetSnapshot {
+        if hidesAmounts {
+            return WidgetSnapshot(totalCents: 0, budgetCents: 0, isBudgetEnabled: false,
+                                  chartCents: Array(repeating: 0, count: 7), lastUpdated: now,
+                                  hasData: true, hidesAmounts: true)
+        }
         let today = calendar.startOfDay(for: now)
         let firstChartDay = calendar.date(byAdding: .day, value: -6, to: today) ?? today
         var currentMonthTotal = Money.zero
@@ -111,22 +121,17 @@ struct WidgetDataService {
 
         let chartData = (0..<7).map { offset in
             let day = calendar.date(byAdding: .day, value: offset, to: firstChartDay) ?? firstChartDay
-            return totalsByDay[day, default: .zero].amount
+            return totalsByDay[day, default: .zero].minorUnits
         }
-
-        if let store = UserDefaults(suiteName: appGroup) {
-            store.set(currentMonthTotal.amount, forKey: "widget_total")
-            store.set(budget, forKey: "widget_budget")
-            store.set(isBudgetEnabled, forKey: "widget_isBudgetEnabled")
-            store.set(chartData, forKey: "widget_chartData")
-            store.set(Date(), forKey: "widget_lastUpdated")
-        }
-        WidgetCenter.shared.reloadAllTimelines()
+        return WidgetSnapshot(totalCents: max(0, currentMonthTotal.minorUnits),
+                              budgetCents: max(0, Money(budget).minorUnits), isBudgetEnabled: isBudgetEnabled,
+                              chartCents: chartData.map { max(0, $0) }, lastUpdated: now,
+                              hasData: true, hidesAmounts: false)
     }
 }
 
 // MARK: - L10n
-struct L10n {
+nonisolated struct L10n {
     static var isZh: Bool {
         guard let lang = Locale.preferredLanguages.first else { return false }
         return lang.hasPrefix("zh")

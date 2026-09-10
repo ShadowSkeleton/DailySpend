@@ -11,40 +11,51 @@ struct ExpenseRowCard: View {
     }
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle().fill(expense.color.opacity(0.15)).frame(width: 48, height: 48)
                 Image(systemName: expense.icon).foregroundStyle(expense.color).font(.title3)
             }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 6) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(L10n.categoryName(expense.category)).font(.body.weight(.semibold))
+                        Spacer(minLength: 0)
+                        amountLabel.fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.categoryName(expense.category)).font(.body).fontWeight(.semibold)
-                    
-                    // ✨ 修复：使用 safeFrequency 安全访问
-                    if expense.safeFrequency != .none {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(Color.blue)
-                            .padding(5)
-                            .background(Color.blue.opacity(0.1))
-                            .clipShape(Circle())
+                        amountLabel
                     }
                 }
-                
-                HStack(spacing: 6) {
-                    if isCurrentYear {
-                        Text(expense.date.formatted(.dateTime.day().month()))
-                    } else {
-                        Text(expense.date.formatted(.dateTime.year().month().day()))
-                            .foregroundStyle(.orange)
-                    }
-                    if !expense.note.isEmpty { Text("·"); Text(expense.note).lineLimit(1) }
-                }.font(.caption).foregroundStyle(.secondary)
+
+                Text(expense.date.formatted(isCurrentYear
+                    ? .dateTime.day().month() : .dateTime.year().month().day()))
+                    .font(.caption).foregroundStyle(.secondary)
+                if expense.safeFrequency != .none || expense.isRecurringChild {
+                    Label(L10n.isZh ? "定期支出" : "Recurring", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                if !expense.displayNote.isEmpty {
+                    Text(expense.displayNote)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-            Spacer()
-            Text("-\(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode)))").roundedNumFont(size: 18, weight: .bold).foregroundStyle(.primary)
-        }.padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .contentShape(Rectangle())
+    }
+
+    private var amountLabel: some View {
+        Text("-\(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode)))")
+            .font(.system(.headline, design: .rounded).weight(.bold))
+            .monospacedDigit()
+            .foregroundStyle(.primary)
     }
 }
 

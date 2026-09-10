@@ -5,7 +5,7 @@ import Foundation
 /// Expenses continue to persist their existing `Double` amounts so this change
 /// doesn't alter the shipped SwiftData schema. All new calculations convert to
 /// minor units first, which keeps split totals stable and reconcilable.
-struct Money: Equatable, Comparable, Hashable, Sendable {
+nonisolated struct Money: Equatable, Comparable, Hashable, Sendable {
     nonisolated static let zero = Money(minorUnits: 0)
 
     nonisolated let minorUnits: Int64
@@ -116,6 +116,31 @@ struct Money: Equatable, Comparable, Hashable, Sendable {
         if cents >= maximum { return .max }
         if cents <= minimum { return .min }
         return NSDecimalNumber(decimal: cents).int64Value
+    }
+}
+
+/// Accept the user's decimal separator without turning “12,50” into 1,250.
+/// Grouped pasted values must have complete three-digit groups; malformed
+/// strings fail validation instead of being partially interpreted as money.
+nonisolated enum MoneyTextInput {
+    static func parse(_ text: String, locale: Locale = .current) -> Double? {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        let decimal = locale.decimalSeparator ?? "."
+        let grouping = locale.groupingSeparator ?? ","
+        let parts = text.components(separatedBy: decimal)
+        guard parts.count <= 2 else { return nil }
+        var integer = parts[0]
+        if !grouping.isEmpty, grouping != decimal, integer.contains(grouping) {
+            let groups = integer.components(separatedBy: grouping)
+            guard let first = groups.first, (1...3).contains(first.count),
+                  groups.dropFirst().allSatisfy({ $0.count == 3 }) else { return nil }
+            integer = groups.joined()
+        }
+        let fraction = parts.count == 2 ? parts[1] : ""
+        let digits = integer + fraction
+        guard !digits.isEmpty, digits.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        return Double((integer.isEmpty ? "0" : integer) + (parts.count == 2 ? "." + fraction : ""))
     }
 }
 

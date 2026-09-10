@@ -16,7 +16,7 @@ struct SettingsView: View {
     @AppStorage("dailyNotify") private var dailyNotify = false
     @AppStorage("notifyTime") private var notifyTime: Double = 0
     @AppStorage("isAppLockEnabled") private var isAppLockEnabled = false
-    @AppStorage(LoveLedgerApp.cloudKitStoreFallbackKey) private var isUsingLocalStoreFallback = false
+    @AppStorage(DailySpendApp.cloudKitStoreFallbackKey) private var isUsingLocalStoreFallback = false
     
     @State private var timeDate: Date = Date()
     @FocusState private var isInputFocused: Bool
@@ -44,9 +44,6 @@ struct SettingsView: View {
     @State private var pendingEncryptedBackupData: Data?
     @State private var backupFilename = "DailySpend_Backup"
     @State private var showCategoryBudgetSheet = false
-    
-    // 控制 About 页面
-    @State private var showAboutSheet = false
     
     @State private var iCloudStatusText: String = L10n.iCloudVerifying
     @State private var iCloudIconColor: Color = .gray
@@ -225,8 +222,8 @@ struct SettingsView: View {
                         : "Requires Face ID, Touch ID, or your device passcode when DailySpend reopens.")
 
                 Text(L10n.isZh
-                    ? "开启后，DailySpend 在重新打开时会锁定；应用切换器中也会隐藏财务记录。"
-                    : "When enabled, DailySpend locks when reopened. Financial records are also hidden in the app switcher.")
+                    ? "开启后，DailySpend 在重新打开时会锁定，且小组件不再显示金额。iOS 可能需要一些时间更新已显示的小组件；如需立即隐藏，请移除小组件。"
+                    : "When enabled, DailySpend locks when reopened and widgets hide amounts. iOS may take time to refresh an existing widget; remove it if you need to hide it immediately.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -258,26 +255,22 @@ struct SettingsView: View {
             
             // MARK: - About
             Section {
-                Button {
-                    isInputFocused = false
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    showAboutSheet = true
+                NavigationLink {
+                    AboutView(themeColor: themeColor)
                 } label: {
-                    HStack {
-                        Label {
-                            Text(L10n.isZh ? "关于 DailySpend" : "About DailySpend")
-                                .foregroundStyle(.primary)
-                        } icon: {
-                            Image(systemName: "heart.text.square.fill")
-                                .foregroundStyle(.pink)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    Label {
+                        Text(L10n.isZh ? "关于 DailySpend" : "About DailySpend")
+                            .foregroundStyle(.primary)
+                    } icon: {
+                        Image("DailySpendLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 26, height: 26)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .accessibilityHidden(true)
                     }
                 }
-                .buttonStyle(.plain)
+                .accessibilityIdentifier("about-dailyspend")
             }
         }
         .navigationTitle(L10n.settings)
@@ -289,15 +282,18 @@ struct SettingsView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .onChange(of: isInputFocused) { wasFocused, isFocused in
+            if wasFocused && !isFocused { normalizeBudgetSettings() }
+        }
         .onAppear {
             if notifyTime == 0 { var components = Calendar.current.dateComponents([.year, .month, .day], from: Date()); components.hour = 10; components.minute = 0; let defaultTime = Calendar.current.date(from: components) ?? Date(); timeDate = defaultTime; notifyTime = defaultTime.timeIntervalSince1970 } else { timeDate = Date(timeIntervalSince1970: notifyTime) }
             checkiCloudStatus()
         }
+        .onDisappear { normalizeBudgetSettings() }
         .onReceive(NotificationCenter.default.publisher(for: .CKAccountChanged)) { _ in
             checkiCloudStatus()
         }
         .sheet(isPresented: $showCategoryBudgetSheet) { CategoryBudgetSettingView(themeColor: themeColor) }
-        .sheet(isPresented: $showAboutSheet) { AboutView() }
         .fileExporter(isPresented: $showFileExporter, document: jsonDocument, contentType: .json, defaultFilename: backupFilename) { result in
             handleBackupExport(result)
         }
@@ -373,7 +369,7 @@ struct SettingsView: View {
         // UI tests intentionally run without CloudKit entitlements and an
         // in-memory store. Constructing CKContainer in that environment traps
         // before it can report an error, so provide a deterministic test state.
-        if LoveLedgerApp.isRunningAutomatedTests {
+        if DailySpendApp.isRunningAutomatedTests {
             iCloudStatusText = L10n.isZh
                 ? "自动化测试中未连接 iCloud"
                 : "iCloud is unavailable in UI tests"
@@ -389,7 +385,7 @@ struct SettingsView: View {
             return
         }
 
-        CKContainer(identifier: LoveLedgerApp.cloudKitContainerIdentifier).accountStatus { status, error in
+        CKContainer(identifier: DailySpendApp.cloudKitContainerIdentifier).accountStatus { status, error in
             DispatchQueue.main.async {
                 if error != nil {
                     self.iCloudStatusText = L10n.isZh
@@ -426,6 +422,20 @@ struct SettingsView: View {
     }
     
     private static let maximumBackupFileSize = 25 * 1024 * 1024
+
+    private func normalizeBudgetSettings() {
+        budgetAmount = normalizedNonnegativeMoney(budgetAmount)
+        alertThreshold = normalizedNonnegativeMoney(alertThreshold)
+    }
+
+    private func normalizedNonnegativeMoney(_ amount: Double) -> Double {
+        guard amount.isFinite else { return 0 }
+        let minorUnits = min(
+            max(Money(amount).minorUnits, 0),
+            ExpenseInputValidator.maximumInputMinorUnits
+        )
+        return Money(minorUnits: minorUnits).amount
+    }
 
     private enum BackupFileError: LocalizedError {
         case tooLarge
@@ -733,201 +743,190 @@ private struct BackupPassphraseSheet: View {
     }
 }
 
-// MARK: - ✨ About View (Corrected Info & Auto Build)
+// MARK: - About View
 struct AboutView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var showPrivacyPolicy = false
-    
-    // ✨ 自动获取版本号和 Build 号
-    var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "Version \(version) (Build \(build))"
-    }
-    
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 30) {
-                    
-                    // 1. App Info Header
-                    VStack(spacing: 16) {
-                        Image(systemName: "heart.text.square.fill")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 80, height: 80)
-                            .foregroundStyle(.pink.gradient)
-                            .shadow(radius: 10)
-                        
-                        VStack(spacing: 6) {
-                            // 修正名称：DailySpend
-                            Text("DailySpend")
-                                .font(.largeTitle)
-                                .fontWeight(.heavy)
-                                .foregroundStyle(.primary)
-                            
-                            // 修正版本：自动拉取
-                            Text(appVersion)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(Color.secondary.opacity(0.1))
-                                .clipShape(Capsule())
-                        }
-                    }
-                    .padding(.top, 40)
-                    
-                    // 2. Developer Credit
-                    VStack(spacing: 12) {
-                        Text("Designed & Developed by")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                            .tracking(2)
-                        
-                        Text("Jackson Feng")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(Color.primary)
-                        
-                        Text("Private by Design")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.blue.gradient)
-                            .clipShape(Capsule())
-                    }
-                    
-                    Divider().padding(.horizontal, 40)
-                    
-                    // 3. Welcome Message (Updated Name)
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(L10n.isZh ? "欢迎使用！" : "Welcome!")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                        
-                        Text(L10n.isZh
-                             ? "DailySpend 是我出于个人兴趣开发的一款记账应用，旨在提供最纯粹、最隐私的记账体验。\n\n没有广告，没有追踪，只有清晰的财务洞察。"
-                             : "DailySpend is a personal passion project designed to make expense tracking simple, private, and insightful.\n\nNo ads, no tracking, just you and your financial goals.")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(4)
-                    }
-                    .padding(.horizontal)
-                    .frame(maxWidth: 500)
-                    
-                    // 4. Production support channel
-                    Button(action: {
-                        if let url = URL(string: "mailto:jacksonfeng0130@yahoo.com?subject=DailySpend%20Support") {
-                            UIApplication.shared.open(url)
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "envelope.fill")
-                            Text(L10n.isZh ? "联系支持" : "Contact Support")
-                                .fontWeight(.bold)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.orange.gradient)
-                        .foregroundColor(.white)
-                        .cornerRadius(16)
-                        .shadow(color: .orange.opacity(0.3), radius: 10, x: 0, y: 5)
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 10)
+    var themeColor: Color = .teal
+    @Environment(\.openURL) private var openURL
 
-                    Button {
-                        showPrivacyPolicy = true
-                    } label: {
-                        Label(L10n.isZh ? "隐私政策" : "Privacy Policy", systemImage: "hand.raised.fill")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal)
-                    
-                    Text(L10n.isZh
-                         ? "您的反馈对我非常重要！如果在测试过程中遇到 Bug 或有任何建议，欢迎随时提交反馈。"
-                         : "Your feedback means the world to me! If you spot a bug or have a feature request, please let me know.")
-                        .font(.caption)
+    private var versionNumber: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
+    private var supportURL: URL? {
+        URL(string: "mailto:jacksonfeng0130@yahoo.com?subject=DailySpend%20Support")
+    }
+
+    var body: some View {
+        List {
+            Section {
+                VStack(spacing: 10) {
+                    Image("DailySpendLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .padding(.bottom, 6)
+                        .accessibilityHidden(true)
+
+                    Text("DailySpend")
+                        .font(.largeTitle.bold())
+
+                    Text(L10n.isZh ? "私密记账，公平分账" : "Private spending. Fair splitting.")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 30)
-                    
-                    Spacer(minLength: 50)
-                    
-                    // 修正年份：2026
-                    Text("© 2026 Jackson Feng. All rights reserved.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .padding(.bottom)
+
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .accessibilityElement(children: .combine)
+                .multilineTextAlignment(.center)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.done) { dismiss() }
+            .listRowBackground(Color.clear)
+
+            Section(L10n.isZh ? "让日常花费更清晰" : "Everyday spending, made clear") {
+                featureRow("creditcard", title: L10n.isZh ? "轻松记账" : "Track your spending",
+                           detail: L10n.isZh ? "记录日常支出，或扫描收据快速填写。" : "Log an expense or scan a receipt to get started.")
+                featureRow("chart.bar", title: L10n.isZh ? "心中有数" : "Stay on budget",
+                           detail: L10n.isZh ? "查看月度趋势，掌握预算余额。" : "See monthly trends and what’s left to spend.")
+                featureRow("person.2", title: L10n.isZh ? "公平分账" : "Split fairly",
+                           detail: L10n.isZh ? "平均分摊或按项目分账，每一分钱都清楚。" : "Split evenly or by item, down to the last cent.")
+            }
+
+            Section {
+                featureRow("checkmark.shield", title: L10n.isZh ? "隐私优先" : "Private by design",
+                           detail: L10n.isZh ? "无广告、无追踪。收据识别在设备上完成。" : "No ads or tracking. Receipt recognition stays on device.")
+                featureRow("icloud", title: L10n.isZh ? "数据由您掌控" : "Your data, your control",
+                           detail: L10n.isZh ? "私有 iCloud 同步，以及由密码保护的备份。" : "Private iCloud sync and passphrase-protected backups.")
+
+                NavigationLink {
+                    InAppPrivacyPolicyView()
+                } label: {
+                    Label(L10n.isZh ? "隐私政策" : "Privacy Policy", systemImage: "hand.raised")
                 }
+                .accessibilityIdentifier("privacy-policy")
+            } header: {
+                Text(L10n.isZh ? "隐私与数据" : "Privacy & Data")
+            } footer: {
+                Text(L10n.isZh
+                     ? "加密备份的密码只由您保管；DailySpend 无法存储或找回密码。"
+                     : "You control the passphrase for encrypted backups; DailySpend never stores it and can’t recover it.")
             }
-            .sheet(isPresented: $showPrivacyPolicy) {
-                InAppPrivacyPolicyView()
+
+            Section(L10n.isZh ? "开发者" : "Developer") {
+                featureRow("person.crop.circle", title: "Jackson Feng",
+                           detail: L10n.isZh ? "独立设计与开发" : "Independent design & development")
+
+                Button {
+                    if let supportURL { openURL(supportURL) }
+                } label: {
+                    Label(L10n.isZh ? "联系支持" : "Contact Support", systemImage: "envelope")
+                }
+                .accessibilityIdentifier("contact-support")
+                .accessibilityHint(L10n.isZh ? "在邮件应用中新建支持邮件" : "Starts a new support email in the Mail app.")
+            }
+
+            Section {
+                LabeledContent(L10n.isZh ? "版本" : "Version") {
+                    Text(versionNumber).monospacedDigit()
+                }
+                LabeledContent(L10n.isZh ? "构建" : "Build") {
+                    Text(buildNumber).monospacedDigit()
+                }
+            } footer: {
+                Text("© 2026 Jackson Feng. All rights reserved.")
             }
         }
+        .listStyle(.insetGrouped)
+        .navigationTitle(L10n.isZh ? "关于 DailySpend" : "About DailySpend")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func featureRow(_ icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(themeColor)
+                .frame(width: 38, height: 38)
+                .background(themeColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.headline)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
     }
 }
 
 private struct InAppPrivacyPolicyView: View {
-    @Environment(\.dismiss) private var dismiss
+    private var privacyContactURL: URL? {
+        URL(string: "mailto:jacksonfeng0130@yahoo.com?subject=DailySpend%20Privacy")
+    }
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text("Effective August 25, 2026")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("DailySpend is free, has no ads, subscriptions, in-app purchases, third-party analytics, or tracking.")
-                }
-
-                Section("Your data") {
-                    Text("DailySpend stores the spending records, budgets, notes, recurring entries, and split-bill details that you enter to provide its features.")
-                    Text("Your data stays in protected app storage and, when available, your private iCloud database. The developer cannot access your private expense history.")
-                    Text("You can turn on App Lock to require device authentication whenever DailySpend is reopened. DailySpend also hides financial records in the app switcher.")
-                }
-
-                Section("Receipt scanning and backups") {
-                    Text("Receipt scanning uses your camera and on-device text recognition to suggest a total. DailySpend does not retain receipt images or send them to the developer.")
-                    Text("Current backup exports are encrypted with a passphrase you choose. DailySpend does not store that passphrase and cannot recover it.")
-                }
-
-                Section("Widgets and notifications") {
-                    Text("Widgets use app-shared storage to show spending and budget information where you choose to place them. Optional reminders are scheduled locally on your device.")
-                }
-
-                Section("Your choices") {
-                    Text("You can delete expenses and category budgets in DailySpend at any time. If you use iCloud, those deletions sync when iCloud is available. Deleting DailySpend removes its local data from that device.")
-                    Text("Camera and notification access are optional and can be changed in the iOS Settings app. DailySpend does not operate user accounts or hold a server-side copy of your personal expense history.")
-                }
-
-                Section("Contact") {
-                    Link("jacksonfeng0130@yahoo.com", destination: URL(string: "mailto:jacksonfeng0130@yahoo.com?subject=DailySpend%20Privacy")!)
-                }
+        List {
+            Section {
+                Text(L10n.isZh ? "2026 年 9 月 4 日起生效" : "Effective September 4, 2026")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(L10n.isZh
+                     ? "DailySpend 免费提供，不含广告、订阅、应用内购买、第三方分析或追踪。"
+                     : "DailySpend is free, with no ads, subscriptions, in-app purchases, third-party analytics, or tracking.")
             }
-            .navigationTitle("Privacy Policy")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.done) { dismiss() }
+
+            Section(L10n.isZh ? "您的数据" : "Your Data") {
+                Text(L10n.isZh
+                     ? "DailySpend 会存储您输入的支出记录、预算、备注和重复记账设置。分账计算留在设备上；只有当您选择“记录”时，相应份额才会成为支出记录。"
+                     : "DailySpend stores the expenses, budgets, notes, and recurring-entry settings you enter. Split calculations stay on your device; only a share you choose to record becomes an expense.")
+                Text(L10n.isZh
+                     ? "数据保存在受保护的应用存储中，并在可用时通过您的私有 iCloud 数据库同步。开发者无法访问您的私人支出记录。"
+                     : "Your data stays in protected app storage and, when available, your private iCloud database. The developer can’t access your private expense history.")
+                Text(L10n.isZh
+                     ? "您可开启 App Lock，在重新打开 DailySpend 时要求设备认证。应用切换器中也会隐藏财务记录。"
+                     : "You can enable App Lock to require device authentication when DailySpend reopens. Financial records are also hidden in the app switcher.")
+            }
+
+            Section(L10n.isZh ? "收据扫描与备份" : "Receipt Scanning & Backups") {
+                Text(L10n.isZh
+                     ? "收据扫描使用相机和设备端文字识别来建议总额。DailySpend 不保留收据图像，也不会将图像发送给开发者。"
+                     : "Receipt scanning uses the camera and on-device text recognition to suggest a total. DailySpend doesn’t retain receipt images or send them to the developer.")
+                Text(L10n.isZh
+                     ? "当前备份使用您选择的密码加密。DailySpend 不保存该密码，也无法恢复密码。"
+                     : "Current backup exports are encrypted with a passphrase you choose. DailySpend doesn’t store that passphrase and can’t recover it.")
+            }
+
+            Section(L10n.isZh ? "小组件与通知" : "Widgets & Notifications") {
+                Text(L10n.isZh
+                     ? "小组件使用应用共享存储，在您选择放置小组件的位置显示支出和预算信息。开启 App Lock 后，小组件会隐藏金额。iOS 可能延迟刷新已显示的小组件；如需立即隐藏，请移除小组件。可选提醒仅在本机排程。"
+                     : "Widgets use app-shared storage to show spending and budget information where you place them. App Lock hides widget amounts. iOS may delay refreshing an existing widget; remove it for immediate privacy. Optional reminders are scheduled locally on your device.")
+            }
+
+            Section(L10n.isZh ? "您的选择" : "Your Choices") {
+                Text(L10n.isZh
+                     ? "您可随时删除支出和分类预算。如果使用 iCloud，删除操作会在 iCloud 可用时同步。删除 DailySpend 会移除该设备上的本地数据。"
+                     : "You can delete expenses and category budgets at any time. If you use iCloud, deletions sync when iCloud is available. Deleting DailySpend removes its local data from that device.")
+                Text(L10n.isZh
+                     ? "相机和通知权限均为可选，可在 iOS “设置”中更改。DailySpend 不提供用户账户，也不会在开发者服务器上保存您的支出历史。"
+                     : "Camera and notification access are optional and can be changed in iOS Settings. DailySpend doesn’t operate user accounts or keep a developer-hosted copy of your expense history.")
+            }
+
+            if let privacyContactURL {
+                Section(L10n.isZh ? "联系方式" : "Contact") {
+                    Link("jacksonfeng0130@yahoo.com", destination: privacyContactURL)
                 }
             }
         }
+        .navigationTitle(L10n.isZh ? "隐私政策" : "Privacy Policy")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

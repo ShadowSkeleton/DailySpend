@@ -5,14 +5,26 @@ import SwiftData
 struct HomeView: View {
     let themeColor: Color
     var onOpenSplitBill: () -> Void = { }
+    @Binding var pendingQuickAdd: Bool
+    var canOpenQuickAdd: Bool
     let backgroundColor = Color(uiColor: .systemGroupedBackground)
     
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Expense.date, order: .reverse) private var expenses: [Expense]
     @Query private var categoryBudgets: [CategoryBudget]
     
-    @State private var showingAddSheet = false
-    @State private var expenseToEdit: Expense?
+    private enum ExpenseSheet: Identifiable {
+        case add
+        case edit(Expense)
+
+        var id: String {
+            switch self {
+            case .add: "add"
+            case .edit(let expense): "edit-\(expense.id)"
+            }
+        }
+    }
+    @State private var expenseSheet: ExpenseSheet?
     @State private var homeSelectedMonth = Date()
     @State private var expensePendingDeletion: Expense?
     @State private var showDeleteConfirmation = false
@@ -47,7 +59,7 @@ struct HomeView: View {
                     // MARK: - Transaction List Section
                     if filteredExpenses.isEmpty {
                         HomeEmptyState(
-                            onAddExpense: { showingAddSheet = true },
+                            onAddExpense: { expenseSheet = .add },
                             onOpenSplitBill: onOpenSplitBill
                         )
                         .listRowBackground(Color.clear)
@@ -67,11 +79,16 @@ struct HomeView: View {
                         ) {
                             ForEach(filteredExpenses) { expense in
                                 Button {
-                                    expenseToEdit = expense
+                                    guard expenseSheet == nil else { return }
+                                    expenseSheet = .edit(expense)
                                 } label: {
                                     ExpenseRowCard(expense: expense)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityIdentifier("transaction-\(expense.id)")
+                                .accessibilityHint(L10n.isZh ? "编辑这笔支出" : "Edit this expense")
                                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                                     .cornerRadius(12)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -79,6 +96,7 @@ struct HomeView: View {
                                             expensePendingDeletion = expense
                                             showDeleteConfirmation = true
                                         } label: { Label(L10n.deleteTransaction, systemImage: "trash") }
+                                        .tint(.red)
                                     }
                                     .listRowSeparator(.hidden)
                                     .listRowBackground(Color.clear)
@@ -103,15 +121,21 @@ struct HomeView: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showingAddSheet = true }) {
+                    Button(action: { expenseSheet = .add }) {
                         Image(systemName: "plus").font(.system(size: 20, weight: .bold)).foregroundStyle(themeColor)
                     }
                     .accessibilityLabel(L10n.isZh ? "添加账单" : "Add expense")
                     .accessibilityHint(L10n.isZh ? "记录一笔新支出或扫描收据" : "Record a new expense or scan a receipt.")
                 }
             }
-            .sheet(isPresented: $showingAddSheet) { AddExpenseView(themeColor: themeColor) }
-            .sheet(item: $expenseToEdit) { expense in EditExpenseView(expense: expense, themeColor: themeColor) }
+            .sheet(item: $expenseSheet, onDismiss: openPendingQuickAdd) { sheet in
+                switch sheet {
+                case .add:
+                    AddExpenseView(themeColor: themeColor)
+                case .edit(let expense):
+                    EditExpenseView(expense: expense, themeColor: themeColor)
+                }
+            }
             .alert("Delete this expense?", isPresented: $showDeleteConfirmation) {
                 Button(L10n.cancel, role: .cancel) { expensePendingDeletion = nil }
                 Button(L10n.deleteTransaction, role: .destructive) { deletePendingExpense() }
@@ -124,9 +148,23 @@ struct HomeView: View {
                 Text(deleteErrorMessage)
             }
         }
-        .onOpenURL { url in
-            if url.scheme == "loveledger" && url.host == "add" { showingAddSheet = true }
+        .onAppear { openPendingQuickAdd() }
+        .onChange(of: pendingQuickAdd) { _, _ in openPendingQuickAdd() }
+        .onChange(of: canOpenQuickAdd) { _, _ in openPendingQuickAdd() }
+    }
+
+    private func openPendingQuickAdd() {
+        // Wait for onDismiss, not merely the selection becoming nil: the
+        // outgoing sheet must finish dismissing before a queued Add opens.
+        guard pendingQuickAdd, canOpenQuickAdd else { return }
+        if case .add? = expenseSheet {
+            // Repeated widget taps already have their destination open.
+            pendingQuickAdd = false
+            return
         }
+        guard expenseSheet == nil else { return }
+        expenseSheet = .add
+        pendingQuickAdd = false
     }
     
     var filteredExpenses: [Expense] {
@@ -152,12 +190,14 @@ struct HomeView: View {
     }
     
     private func generateCSV() -> CSVDocument {
-        var csvString = "Date,Category,Amount,Note\n"
-        let dateFormatter = DateFormatter(); dateFormatter.dateStyle = .short; dateFormatter.timeStyle = .short
+        var csvString = CSVDocument.row(["Date", "Category", "Amount", "Note"])
+        let dateFormatter = ISO8601DateFormatter()
         for expense in filteredExpenses {
-            var safeNote = expense.note.replacingOccurrences(of: "\"", with: "\"\"")
-            safeNote = "\"\(safeNote)\""
-            csvString.append("\(dateFormatter.string(from: expense.date)),\(L10n.categoryName(expense.category)),\(expense.normalizedAmount),\(safeNote)\n")
+            csvString.append(CSVDocument.row([
+                dateFormatter.string(from: expense.date), L10n.categoryName(expense.category),
+                String(format: "%.2f", locale: Locale(identifier: "en_US_POSIX"), expense.normalizedAmount),
+                expense.note
+            ]))
         }
         return CSVDocument(text: csvString)
     }
