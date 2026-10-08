@@ -1,0 +1,58 @@
+name: DailySpend CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# All unspecified token permissions are disabled. No custom secrets are used.
+permissions:
+  contents: read
+
+concurrency:
+  group: dailyspend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator-tests:
+    name: Simulator tests (${{ matrix.configuration }})
+    # Standard hosted runners are free for public repos. If visibility changes,
+    # stop hosted tests instead of consuming a private repo's billable minutes.
+    if: github.event.repository.private == false && github.event.repository.visibility == 'public'
+    runs-on: macos-26
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - name: Check out source without retaining credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+
+      - name: Check for credentials and private data files
+        run: python3 scripts/ci/check_repository_safety.py
+
+      - name: Verify CI helper safety boundaries
+        run: python3 -m unittest discover -s scripts/ci/tests -v
+
+      - name: Build and test in a disposable simulator
+        env:
+          DAILYSPEND_TEST_CONFIGURATION: ${{ matrix.configuration }}
+        run: >-
+          python3 scripts/ci/run_tests.py
+          --configuration "$DAILYSPEND_TEST_CONFIGURATION"
+          --xcode-version 26.6
+          --ios-major 26
+          --output-dir "$RUNNER_TEMP/dailyspend-tests"
+
+      # No caches, screenshots, archives, databases, or result bundles are
+      # uploaded. Only test counts and toolchain information enter the summary.

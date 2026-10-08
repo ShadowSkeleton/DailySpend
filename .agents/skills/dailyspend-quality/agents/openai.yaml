@@ -1,0 +1,4 @@
+interface:
+  display_name: "DailySpend Quality Agent"
+  short_description: "Feature tests, upgrade safety, UI/UX and release reports"
+  default_prompt: "Use $dailyspend-quality to review this DailySpend version, implement missing feature tests, check upgrade safety, critique changed UI/UX, and write a detailed upgrade report."

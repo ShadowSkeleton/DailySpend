@@ -1,0 +1,4 @@
+interface:
+  display_name: "DailySpend Upgrade Safety"
+  short_description: "Review migrations, backups, and iCloud before release"
+  default_prompt: "Use $dailyspend-upgrade-safety to review this DailySpend version before App Store Connect upload or App Store release."
