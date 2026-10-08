@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible DailySpend problem using synthetic data.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a public issue. Use made-up amounts/names and cropped or redacted images.
+        Never attach real receipts, expense history, backups, passphrases, account details, tokens, or full diagnostic archives.
+        For a suspected security vulnerability, use private reporting as described in docs/DEVELOPMENT_WORKFLOW.md.
+  - type: input
+    id: environment
+    attributes:
+      label: Version/build and device/OS
+      placeholder: "DailySpend 1.0 (14), iPhone, iOS 26.5"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Give numbered steps using disposable sample records.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and impact
+      description: Describe crashes, incorrect results, privacy exposure, or possible data loss without sharing the data.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Optional sanitized evidence
+      description: Synthetic screenshots or a minimal redacted error excerpt only.

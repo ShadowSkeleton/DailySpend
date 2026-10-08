@@ -114,6 +114,8 @@ Automated checks cover exact-cent allocations, receipt export, backup validation
 
 ## Project guide
 
+For everyday development, follow the [development workflow](docs/DEVELOPMENT_WORKFLOW.md) and [definition of done](docs/DEFINITION_OF_DONE.md). Pull requests use structured review templates and Debug/Release simulator CI with synthetic data, disabled signing, and no custom secrets. Hosted CI is limited to public repositories using standard free runners; release and migration safety checks remain separate.
+
 | Path | Purpose |
 |---|---|
 | `DailySpend/Expense.swift`, `Money.swift`, `MoneyStoreMigration.swift` | Expense model, exact-cent arithmetic, migration |

@@ -123,3 +123,7 @@ xcuserdata
 !DailySpend.xcodeproj/xcshareddata/xcschemes/*.xcscheme
 !DailySpend.xcodeproj/project.xcworkspace/
 !DailySpend.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+
+# Local Python helper bytecode is generated, not source.
+__pycache__/
+*.py[cod]
