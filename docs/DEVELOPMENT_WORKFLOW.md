@@ -42,6 +42,7 @@ Run from the repository root. No packages are installed by these commands. The r
 
 ```bash
 python3 scripts/ci/check_repository_safety.py
+python3 -m unittest discover -s scripts/ci/tests -v
 python3 scripts/ci/run_tests.py --configuration Debug --xcode-version 26.6 --ios-major 26 --output-dir /private/tmp/dailyspend-ci
 python3 scripts/ci/run_tests.py --configuration Release --xcode-version 26.6 --ios-major 26 --output-dir /private/tmp/dailyspend-ci
 ```

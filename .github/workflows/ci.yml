@@ -41,6 +41,9 @@ jobs:
       - name: Check for credentials and private data files
         run: python3 scripts/ci/check_repository_safety.py
 
+      - name: Verify CI helper safety boundaries
+        run: python3 -m unittest discover -s scripts/ci/tests -v
+
       - name: Build and test in a disposable simulator
         env:
           DAILYSPEND_TEST_CONFIGURATION: ${{ matrix.configuration }}
