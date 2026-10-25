@@ -12,11 +12,17 @@ Continue authorized local review and fixes until the relevant checks and report 
 
 # DailySpend quality agent
 
-The project agent is defined in `.codex/agents/dailyspend-quality.toml`. Its reusable workflow is `.agents/skills/dailyspend-quality/SKILL.md`, invoked as `$dailyspend-quality` or by asking to use the `dailyspend-quality` agent.
+The project agent is defined in `.codex/agents/dailyspend-quality.toml`. Its reusable workflow is `.agents/skills/dailyspend-quality/SKILL.md`, invoked as `$dailyspend-quality` in Codex, `/dailyspend-quality` in Claude Code, or by asking either tool to use the `dailyspend-quality` agent.
 
 Before preparing each release, use that workflow to review the full feature-to-test matrix, run applicable automated suites, complete the existing upgrade-safety review, critique changed UI/UX using screenshots and interaction evidence, and write a detailed version/build-specific report under `docs/releases/`. Implement meaningful missing automated coverage within authorized development scope; record hardware/account checks separately. Keep upload/restricted-validation and broad-distribution/public-release decisions separate.
 
 During ordinary development, test affected feature behavior and regressions, review changed UI/UX, and summarize upgrade implications. Cosmetic edits alone do not require new unit tests or a full release audit. Do not claim unrun checks passed. Use the workflow directly if custom agent delegation is unavailable.
+
+# Codex and Claude Code
+
+Both tools use the same workflows. The canonical files are this `AGENTS.md`, `.agents/skills/*/SKILL.md` with their references, and `.codex/agents/dailyspend-quality.toml`. Claude Code loads them through thin wrappers: `CLAUDE.md` imports this file, `.claude/skills/<name>/SKILL.md` points to the matching `.agents/skills/<name>/SKILL.md`, and `.claude/agents/dailyspend-quality.md` repeats the Codex agent's instructions verbatim.
+
+Change workflow content only in the canonical files. When a skill's `name`/`description` or the agent's `description`/`developer_instructions` changes, update the matching `.claude/` wrapper in the same change. A new canonical skill needs a new wrapper. `python3 scripts/ci/check_agent_config.py` verifies this and runs in CI. Do not replace wrappers with symlinks; the repository safety check rejects them.
 
 # Development workflow
 
