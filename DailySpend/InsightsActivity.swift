@@ -87,7 +87,7 @@ struct CalendarView: View {
                         withAnimation(.spring()) { currentMonth = Date() }
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                     }) {
-                        HStack(spacing: 4) { Image(systemName: "arrow.uturn.backward"); Text("Today") }
+                        HStack(spacing: 4) { Image(systemName: "arrow.uturn.backward"); Text(L10n.isZh ? "本月" : "This Month") }
                             .font(.caption)
                             .fontWeight(.bold)
                             .padding(.horizontal, 10)
@@ -309,7 +309,7 @@ struct InsightsMonthYearPicker: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            HStack { Text("Select Month").font(.headline); Spacer() }
+            HStack { Text(L10n.isZh ? "选择月份" : "Select Month").font(.headline); Spacer() }
                 .padding(.top, 24)
                 .padding(.horizontal)
 

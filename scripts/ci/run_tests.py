@@ -11,6 +11,13 @@ import uuid
 import os
 
 
+DEBUG_ONLY_UI_TESTS = (
+    "testDebugDemoDataMakesDashboardAndInsightsTestable",
+    "testHomeScanFillsANewExpenseForReview",
+    "testScannedReceiptFillsBothSplitModes",
+)
+
+
 def output(*command: str) -> str:
     return subprocess.check_output(command, text=True).strip()
 
@@ -79,8 +86,10 @@ def main() -> int:
             "ENABLE_TESTABILITY=YES",
         ]
         if arguments.configuration == "Release":
-            # This test exclusively exercises the #if DEBUG demo-data feature.
-            command.append("-skip-testing:DailySpendUITests/DailySpendUITests/testDebugDemoDataMakesDashboardAndInsightsTestable")
+            # These tests exclusively exercise #if DEBUG launch arguments: the
+            # demo data and the synthetic receipt used in place of the camera.
+            for test in DEBUG_ONLY_UI_TESTS:
+                command.append(f"-skip-testing:DailySpendUITests/DailySpendUITests/{test}")
         status = subprocess.run(command, cwd=root).returncode
         if result_bundle.exists():
             summary = json.loads(output("xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(result_bundle)))
@@ -100,7 +109,7 @@ def main() -> int:
                     stream.write(f"{version.replace(chr(10), '; ')}; iOS {runtime['version']}; {device['name']}\n\n")
                     stream.write(f"Counts: `{json.dumps(safe_summary)}`\n\n")
                     if arguments.configuration == "Release":
-                        stream.write("Debug-only demo-data test excluded; it runs in the Debug job.\n\n")
+                        stream.write("Debug-only demo-data and synthetic-receipt tests excluded; they run in the Debug job.\n\n")
                     stream.write("Synthetic data only. Signed device, historical migration, and release gates remain separate.\n")
         elif status == 0:
             status = 1

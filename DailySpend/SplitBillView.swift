@@ -17,7 +17,7 @@ enum SplitMode: String, CaseIterable {
         case .evenly:
             return L10n.isZh ? "输入总额，系统会将每一分钱公平分配。" : "Enter one total and keep every cent accounted for."
         case .byPerson:
-            return L10n.isZh ? "按项目和参与者分配，再一键记录。" : "Assign items to people, then record each share."
+            return L10n.isZh ? "添加或扫描项目，再选择谁分摊每一项。" : "Add or scan items, then choose who shared each one."
         }
     }
 }
@@ -88,12 +88,13 @@ struct SplitBillView: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .animation(.snappy, value: splitMode)
             .toolbar {
-                // Clear Form Button (Trash Icon)
+                // Starting over is a reset, not a deletion of saved data, so
+                // it uses the standard reset symbol rather than a red trash can.
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showNewSplitConfirmation = true }) {
-                        Image(systemName: "trash")
-                            .foregroundStyle(.red)
+                        Image(systemName: "arrow.counterclockwise")
                     }
+                    .tint(.primary)
                     .accessibilityLabel(L10n.isZh ? "开始新的一单" : "Start a new split")
                 }
             }
@@ -116,7 +117,7 @@ struct SplitBillView: View {
             } message: {
                 Text(L10n.isZh ? "当前分账会保留，除非你确认清空表单。" : "Your current split stays intact unless you choose Clear Form.")
             }
-            .alert("Couldn’t Prepare Receipt", isPresented: $showShareError) {
+            .alert(L10n.isZh ? "无法生成收据" : "Couldn’t Prepare Receipt", isPresented: $showShareError) {
                 Button(L10n.ok, role: .cancel) { }
             } message: {
                 Text(shareErrorMessage)

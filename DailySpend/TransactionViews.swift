@@ -11,6 +11,9 @@ struct AddExpenseView: View {
     var prefilledAmount: Double?
     var prefilledNote: String?
     var prefilledCategory: String?
+    var prefilledDate: Date?
+    /// A receipt already read elsewhere, such as from the Home scan button.
+    var prefilledDraft: ReceiptDraft?
     
     // ✨ 新增：保存成功后的回调
     var onSave: (() -> Void)? = nil
@@ -19,11 +22,11 @@ struct AddExpenseView: View {
     @State private var category = "Food"
     @State private var note = ""
     @State private var date = Date()
-    @State private var showingScanner = false
-    @State private var scanErrorMessage: String?
+    @State private var scanner = ReceiptScanController()
+    @State private var appliedDraft: ReceiptDraft?
+    @State private var showsDraftBanner = false
+    @State private var hasAppeared = false
     @FocusState private var isInputActive: Bool
-    @AppStorage("showScanTip") private var showScanTip = true
-    @State private var showScanAlert = false
     @State private var showSaveError = false
     @State private var saveErrorMessage = ""
     
@@ -41,6 +44,12 @@ struct AddExpenseView: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(spacing: 24) {
+                        if showsDraftBanner, let draft = appliedDraft {
+                            ReceiptDraftBanner(draft: draft, context: .expense, themeColor: themeColor) {
+                                withAnimation { showsDraftBanner = false }
+                            }
+                            .padding(.horizontal)
+                        }
                         amountSection
                         categorySection
                         detailsSection
@@ -76,37 +85,26 @@ struct AddExpenseView: View {
                 }
             }
             .onAppear {
+                // A sheet's onAppear can run again after a nested camera or
+                // photo picker closes; only the first appearance prefills.
+                guard !hasAppeared else { return }
+                hasAppeared = true
+                scanner.onDraft = { apply($0) }
                 if let initialAmount = prefilledAmount, amount == nil { amount = initialAmount }
                 if let initialNote = prefilledNote, note.isEmpty { note = initialNote }
                 if let initialCat = prefilledCategory { category = initialCat }
+                if let initialDate = prefilledDate { date = initialDate }
+                if let prefilledDraft { apply(prefilledDraft) }
                 
-                if amount == nil && !showingScanner {
+                if amount == nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { isInputActive = true }
                 }
             }
-            .alert(L10n.scanTipTitle, isPresented: $showScanAlert) {
-                Button(L10n.dontShowAgain) { showScanTip = false; showingScanner = true }
-                Button(L10n.gotIt) { showingScanner = true }
-            } message: { Text(L10n.scanTipMessage) }
-            .sheet(isPresented: $showingScanner) {
-                ReceiptScannerView(
-                    scannedAmount: $amount,
-                    scanErrorMessage: $scanErrorMessage
-                )
-                .ignoresSafeArea()
-            }
-            .alert("Couldn’t Save Expense", isPresented: $showSaveError) {
+            .receiptScanning(scanner, themeColor: themeColor)
+            .alert(L10n.isZh ? "无法保存支出" : "Couldn’t Save Expense", isPresented: $showSaveError) {
                 Button(L10n.ok, role: .cancel) { }
             } message: {
                 Text(saveErrorMessage)
-            }
-            .alert("Couldn’t Scan Receipt", isPresented: Binding(
-                get: { scanErrorMessage != nil },
-                set: { if !$0 { scanErrorMessage = nil } }
-            )) {
-                Button(L10n.ok, role: .cancel) { scanErrorMessage = nil }
-            } message: {
-                Text(scanErrorMessage ?? "")
             }
             .background(Color(.systemGroupedBackground))
         }
@@ -115,20 +113,14 @@ struct AddExpenseView: View {
     var amountSection: some View {
         VStack(spacing: 10) {
             Text(L10n.amount).font(.caption).fontWeight(.bold).foregroundStyle(.secondary).tracking(1)
-            HStack(alignment: .center, spacing: 8) {
-                Text(L10n.currencySymbol).roundedNumFont(size: 36, weight: .bold).foregroundStyle(themeColor)
-                TextField("0", value: $amount, format: .number).roundedNumFont(size: 64, weight: .heavy).keyboardType(.decimalPad).focused($isInputActive).multilineTextAlignment(.center).tint(themeColor).frame(minWidth: 60)
-                Button(action: { if showScanTip { showScanAlert = true } else { showingScanner = true } }) {
-                    Image(systemName: "doc.text.viewfinder").font(.system(size: 24, weight: .semibold)).foregroundColor(themeColor).padding(12).background(themeColor.opacity(0.1)).clipShape(Circle())
-                }
-                .accessibilityLabel(L10n.isZh ? "扫描收据" : "Scan receipt")
-                .accessibilityHint(L10n.isZh ? "用相机识别收据金额" : "Use the camera to recognize a receipt amount.")
-            }.padding(.horizontal, 24)
+            ExpenseAmountField(amount: $amount, isFocused: $isInputActive, themeColor: themeColor)
             if amount != nil && !isValidAmount {
-                Text("Enter an amount greater than zero")
+                Text(L10n.isZh ? "请输入大于 0 的金额" : "Enter an amount greater than zero")
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
+            ReceiptScanButton(controller: scanner, themeColor: themeColor)
+                .padding(.top, 4)
         }.frame(maxWidth: .infinity).padding(.vertical, 24).background { RoundedRectangle(cornerRadius: 20).fill(themeColor.opacity(0.1)) }.padding(.horizontal)
     }
     
@@ -164,6 +156,42 @@ struct AddExpenseView: View {
                 .accessibilityIdentifier("expense-note")
                 .padding()
         }.background(cardBackground).cornerRadius(16).padding(.horizontal)
+    }
+    
+    /// Fills the form from a receipt. Nothing is saved until the person taps
+    /// Save, and fields the scan didn't read keep their current values.
+    private func apply(_ draft: ReceiptDraft) {
+        withAnimation {
+            if let total = draft.amountToRecord { amount = total.amount }
+            if let remembered = rememberedCategory(for: draft.merchant) ?? draft.category {
+                category = remembered
+            }
+            if let receiptDate = draft.date { date = receiptDate }
+            let suggestion = draft.suggestedNote
+            // Replace the note only if the person hasn't written their own.
+            if !suggestion.isEmpty && (note.isEmpty || note == appliedDraft?.suggestedNote) {
+                note = suggestion
+            }
+            appliedDraft = draft
+            showsDraftBanner = true
+        }
+        isInputActive = draft.amountToRecord == nil
+    }
+
+    /// The category this person chose last time at the same store. Their own
+    /// history is a better guess than the model's general one.
+    private func rememberedCategory(for merchant: String?) -> String? {
+        guard let merchant, merchant.count >= 2 else { return nil }
+        var descriptor = FetchDescriptor<Expense>(
+            predicate: #Predicate { $0.note.localizedStandardContains(merchant) },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = 20
+        let matches = (try? modelContext.fetch(descriptor)) ?? []
+        return matches.first { expense in
+            let firstLine = expense.note.split(separator: "\n").first.map(String.init) ?? ""
+            return firstLine.localizedCaseInsensitiveCompare(merchant) == .orderedSame
+        }?.category
     }
     
     private func saveExpense() {
@@ -270,13 +298,13 @@ struct EditExpenseView: View {
                 }
             }
             .background(Color(.systemGroupedBackground))
-            .alert("Delete this expense?", isPresented: $showDeleteConfirmation) {
+            .alert(L10n.deleteExpenseTitle, isPresented: $showDeleteConfirmation) {
                 Button(L10n.cancel, role: .cancel) { }
                 Button(L10n.deleteTransaction, role: .destructive, action: deleteExpense)
             } message: {
-                Text("This can’t be undone from the transaction list.")
+                Text(L10n.deleteExpenseMessage)
             }
-            .alert("Couldn’t Save Expense", isPresented: $showSaveError) {
+            .alert(L10n.isZh ? "无法保存支出" : "Couldn’t Save Expense", isPresented: $showSaveError) {
                 Button(L10n.ok, role: .cancel) { }
             } message: {
                 Text(saveErrorMessage)
@@ -287,10 +315,11 @@ struct EditExpenseView: View {
     var amountSection: some View {
         VStack(spacing: 10) {
             Text(L10n.amount).font(.caption).fontWeight(.bold).foregroundStyle(.secondary).tracking(1)
-            HStack(alignment: .center, spacing: 8) {
-                Text(L10n.currencySymbol).roundedNumFont(size: 36, weight: .bold).foregroundStyle(themeColor)
-                TextField("0", value: $amount, format: .number).roundedNumFont(size: 64, weight: .heavy).keyboardType(.decimalPad).focused($isInputActive).multilineTextAlignment(.center).tint(themeColor).frame(minWidth: 60)
-            }.padding(.horizontal, 24)
+            ExpenseAmountField(
+                amount: Binding(get: { amount }, set: { amount = $0 ?? 0 }),
+                isFocused: $isInputActive,
+                themeColor: themeColor
+            )
         }.frame(maxWidth: .infinity).padding(.vertical, 24).background { RoundedRectangle(cornerRadius: 20).fill(themeColor.opacity(0.1)) }.padding(.horizontal)
     }
     
@@ -362,5 +391,38 @@ struct EditExpenseView: View {
             saveErrorMessage = error.localizedDescription
             showSaveError = true
         }
+    }
+}
+
+// MARK: - Amount Field
+
+/// The large amount entry used by Add and Edit. The currency symbol sits
+/// directly beside the number, matching Quick Split, instead of floating at
+/// the card's edge.
+struct ExpenseAmountField: View {
+    @Binding var amount: Double?
+    var isFocused: FocusState<Bool>.Binding
+    let themeColor: Color
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(L10n.currencySymbol)
+                .roundedNumFont(size: 36, weight: .bold)
+                .foregroundStyle(themeColor)
+            // Prefilled and edited amounts always show their cents, like
+            // every other amount in the app ("222.20", not "222.2").
+            TextField("0", value: $amount, format: .number.precision(.fractionLength(2)))
+                .roundedNumFont(size: 64, weight: .heavy)
+                .keyboardType(.decimalPad)
+                .focused(isFocused)
+                .tint(themeColor)
+                .fixedSize()
+                .accessibilityLabel(L10n.amount)
+                .accessibilityIdentifier("expense-amount")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+        .contentShape(Rectangle())
+        .onTapGesture { isFocused.wrappedValue = true }
     }
 }

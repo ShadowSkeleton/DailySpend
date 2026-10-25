@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage("notifyTime") private var notifyTime: Double = 0
     @AppStorage("isAppLockEnabled") private var isAppLockEnabled = false
     @AppStorage(DailySpendApp.cloudKitStoreFallbackKey) private var isUsingLocalStoreFallback = false
+    @State private var receiptStatus = ReceiptIntelligenceStatus.current
     
     @State private var timeDate: Date = Date()
     @FocusState private var isInputFocused: Bool
@@ -152,7 +153,7 @@ struct SettingsView: View {
             .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
             
             // MARK: - Budget Section
-            Section(header: Text("Budget")) {
+            Section(header: Text(L10n.budget)) {
                 Toggle(L10n.budgetEnable, isOn: $isBudgetEnabled)
                     .tint(themeColor)
                     .onChange(of: isBudgetEnabled) { _, enabled in
@@ -163,6 +164,7 @@ struct SettingsView: View {
                     HStack {
                         Text(L10n.budgetAmount)
                         Spacer()
+                        Text(L10n.currencySymbol).foregroundStyle(.secondary)
                         TextField("0", value: $budgetAmount, format: .number)
                             .keyboardType(.decimalPad)
                             .focused($isInputFocused)
@@ -178,6 +180,7 @@ struct SettingsView: View {
                     HStack {
                         Text(L10n.alertThreshold)
                         Spacer()
+                        Text(L10n.currencySymbol).foregroundStyle(.secondary)
                         TextField("0", value: $alertThreshold, format: .number)
                             .keyboardType(.decimalPad)
                             .focused($isInputFocused)
@@ -194,7 +197,7 @@ struct SettingsView: View {
                                 .foregroundStyle(Color.primary)
                             Spacer()
                             if !categoryBudgets.isEmpty {
-                                Text("\(categoryBudgets.count) set").foregroundStyle(.secondary).font(.caption)
+                                Text(L10n.isZh ? "已设置 \(categoryBudgets.count) 项" : "\(categoryBudgets.count) set").foregroundStyle(.secondary).font(.caption)
                             }
                             Image(systemName: "chevron.right").font(.caption).fontWeight(.bold).foregroundStyle(Color(uiColor: .tertiaryLabel))
                         }
@@ -253,6 +256,31 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             
+            // MARK: - Receipt Scanning
+            Section {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.title3)
+                        .foregroundStyle(receiptStatus.canReadItems ? themeColor : .secondary)
+                        .frame(width: 28)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.isZh ? "Apple 智能读取收据" : "Apple Intelligence Receipts")
+                        Text(receiptStatus.title)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("receipt-intelligence-status")
+            } header: {
+                Text(L10n.isZh ? "收据扫描" : "Receipt Scanning")
+            } footer: {
+                Text(L10n.isZh
+                     ? "收据在此设备上读取，图片不会被保存或发送到任何地方。没有 Apple 智能的设备仍可识别收据总额。"
+                     : "Receipts are read on this device. Images are never saved or sent anywhere. Devices without Apple Intelligence still read the total.")
+            }
+
             // MARK: - About
             Section {
                 NavigationLink {
@@ -288,6 +316,7 @@ struct SettingsView: View {
         .onAppear {
             if notifyTime == 0 { var components = Calendar.current.dateComponents([.year, .month, .day], from: Date()); components.hour = 10; components.minute = 0; let defaultTime = Calendar.current.date(from: components) ?? Date(); timeDate = defaultTime; notifyTime = defaultTime.timeIntervalSince1970 } else { timeDate = Date(timeIntervalSince1970: notifyTime) }
             checkiCloudStatus()
+            receiptStatus = .current
         }
         .onDisappear { normalizeBudgetSettings() }
         .onReceive(NotificationCenter.default.publisher(for: .CKAccountChanged)) { _ in
@@ -789,7 +818,7 @@ struct AboutView: View {
 
             Section(L10n.isZh ? "让日常花费更清晰" : "Everyday spending, made clear") {
                 featureRow("creditcard", title: L10n.isZh ? "轻松记账" : "Track your spending",
-                           detail: L10n.isZh ? "记录日常支出，或扫描收据快速填写。" : "Log an expense or scan a receipt to get started.")
+                           detail: L10n.isZh ? "记录日常支出，或扫描收据，由 Apple 智能在设备上填写明细。" : "Log an expense, or scan a receipt and let Apple Intelligence fill in the details on device.")
                 featureRow("chart.bar", title: L10n.isZh ? "心中有数" : "Stay on budget",
                            detail: L10n.isZh ? "查看月度趋势，掌握预算余额。" : "See monthly trends and what’s left to spend.")
                 featureRow("person.2", title: L10n.isZh ? "公平分账" : "Split fairly",
@@ -897,8 +926,8 @@ private struct InAppPrivacyPolicyView: View {
 
             Section(L10n.isZh ? "收据扫描与备份" : "Receipt Scanning & Backups") {
                 Text(L10n.isZh
-                     ? "收据扫描使用相机和设备端文字识别来建议总额。DailySpend 不保留收据图像，也不会将图像发送给开发者。"
-                     : "Receipt scanning uses the camera and on-device text recognition to suggest a total. DailySpend doesn’t retain receipt images or send them to the developer.")
+                     ? "收据扫描使用相机或您选择的照片，在设备上识别文字。支持 Apple 智能的设备会用设备端模型整理商家、项目、税费和总额，供您保存前核对。DailySpend 不保留收据图像，也不会将图像或文字发送到任何服务器。"
+                     : "Receipt scanning reads text from the camera or a photo you choose, on your device. On devices with Apple Intelligence, Apple’s on-device model organizes the store, items, tax, and total for you to review before saving. DailySpend doesn’t keep receipt images and never sends images or receipt text to any server.")
                 Text(L10n.isZh
                      ? "当前备份使用您选择的密码加密。DailySpend 不保存该密码，也无法恢复密码。"
                      : "Current backup exports are encrypted with a passphrase you choose. DailySpend doesn’t store that passphrase and can’t recover it.")
@@ -969,6 +998,21 @@ struct CategoryBudgetSettingView: View {
 
 // Helper Row View
 struct CategoryBudgetRow: View {
+    /// Shows a stored limit with its cents. Rounding here would quietly
+    /// rewrite the saved value when the row saves on dismissal.
+    nonisolated static func displayText(for money: Money, locale: Locale = .current) -> String {
+        money.amount.formatted(.number.precision(.fractionLength(money.minorUnits % 100 == 0 ? 0 : 2))
+            .grouping(.never)
+            .locale(locale))
+    }
+
+    /// Reads the person's own decimal separator first, then a period, which
+    /// older versions of this row always displayed.
+    nonisolated static func parse(_ text: String, locale: Locale = .current) -> Double? {
+        MoneyTextInput.parse(text, locale: locale)
+            ?? Double(text.replacingOccurrences(of: ",", with: "."))
+    }
+
     let category: (name: String, icon: String, color: Color)
     @Environment(\.modelContext) private var modelContext
     @State private var amountText: String = ""
@@ -981,7 +1025,7 @@ struct CategoryBudgetRow: View {
             Label { Text(L10n.categoryName(category.name)).fontWeight(.medium) }
             icon: { Image(systemName: category.icon).foregroundStyle(category.color) }
             Spacer()
-            TextField("No Limit", text: $amountText)
+            TextField(L10n.isZh ? "不限" : "No Limit", text: $amountText)
                 .keyboardType(.decimalPad)
                 .focused($isFocused)
                 .multilineTextAlignment(.trailing)
@@ -1005,16 +1049,14 @@ struct CategoryBudgetRow: View {
         let name = category.name
         let fetchDescriptor = FetchDescriptor<CategoryBudget>(predicate: #Predicate { $0.category == name })
         if let record = try? modelContext.fetch(fetchDescriptor).first {
-            if record.normalizedAmount > 0 { amountText = String(format: "%.0f", record.normalizedAmount) }
+            if record.normalizedAmount > 0 { amountText = Self.displayText(for: record.money) }
         }
     }
     
     private func saveBudget() {
-        let cleanText = amountText
-            .replacingOccurrences(of: ",", with: ".")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let shouldRemoveBudget = cleanText.isEmpty || cleanText == "0"
-        let amount = Double(cleanText)
+        let cleanText = amountText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let amount = Self.parse(cleanText)
+        let shouldRemoveBudget = cleanText.isEmpty || amount == 0
 
         if !shouldRemoveBudget {
             guard let amount, ExpenseInputValidator.isValidLineItemAmount(amount) else {

@@ -73,13 +73,15 @@ nonisolated enum SplitNote {
     }
 }
 
-nonisolated struct SharedItemShare: Identifiable {
+nonisolated struct ItemShare: Identifiable {
     let id: UUID
     let name: String
     let total: Money
     let share: Money
     let peopleCount: Int
     let participantNames: [String]
+
+    var isShared: Bool { peopleCount > 1 }
 }
 
 // MARK: - Shared Models
@@ -94,17 +96,27 @@ struct ReceiptData: Equatable {
     var footer: String
 }
 
-struct BasketItem: Identifiable, Equatable, Codable {
-    var id = UUID()
-    var name: String
-    var price: Double
-}
-
-struct SharedItem: Identifiable, Equatable, Codable {
+/// One line on the bill. An item with one person is theirs alone; with
+/// several people its price is divided between them to the cent.
+struct SplitItem: Identifiable, Equatable {
     var id = UUID()
     var name: String
     var price: Double
     var involvedPersonIDs: [UUID]
+}
+
+/// Tip choices shared by both split modes. Positive values are percentages.
+nonisolated enum TipPreset {
+    static let none = 0
+    static let customPercentage = -1
+    static let fixedAmount = -2
+    static let percentages = [10, 15, 18, 20]
+
+    /// Tipping is customary in the United States and Canada. Elsewhere a
+    /// default tip would add money nobody intended to pay.
+    static var defaultSelection: Int {
+        ["US", "CA"].contains(Locale.current.region?.identifier ?? "") ? 15 : none
+    }
 }
 
 // These are UI-facing state containers, but their values and calculation
@@ -114,7 +126,6 @@ struct SharedItem: Identifiable, Equatable, Codable {
 nonisolated class SplitPerson: Identifiable, ObservableObject {
     let id = UUID()
     @Published var name: String
-    @Published var items: [BasketItem] = []
     
     var friendID: UUID?
     
@@ -122,32 +133,52 @@ nonisolated class SplitPerson: Identifiable, ObservableObject {
         self.name = name
         self.friendID = friendID
     }
-    
-    var personalSubtotal: Double {
-        items.reduce(0) { $0 + $1.price }
-    }
 }
 
 // MARK: - The Session Logic Engine
 
 nonisolated class SplitSession: ObservableObject {
     @Published var people: [SplitPerson] = []
-    @Published var sharedItems: [SharedItem] = []
+    @Published var items: [SplitItem] = []
     @Published var taxAmount: Double?
     
-    @Published var tipSelection: Int = 15
+    @Published var tipSelection: Int = TipPreset.defaultSelection
     @Published var customTipPercentage: Int?
     @Published var customFixedTip: Double?
+
+    /// The store name from a scanned receipt, used in notes and the export.
+    @Published var merchant: String?
     
     init() {
-        addPerson(name: NSLocalizedString("Me", comment: "Default user"))
+        addPerson(name: Self.defaultFirstPersonName)
+    }
+
+    static var defaultFirstPersonName: String {
+        L10n.isZh ? "我" : "Me"
     }
     
     // MARK: - Person Management
     
     func addPerson(name: String, friendID: UUID? = nil) {
         let newPerson = SplitPerson(name: name, friendID: friendID)
+        // Items shared by everyone stay shared by everyone, so people can be
+        // added after scanning without reassigning every line.
+        let everyone = Set(people.map(\.id))
+        for index in items.indices where !everyone.isEmpty && Set(items[index].involvedPersonIDs) == everyone {
+            items[index].involvedPersonIDs.append(newPerson.id)
+        }
         people.append(newPerson)
+        objectWillChange.send()
+    }
+
+    /// A placeholder that still tells people apart when no name is typed.
+    var nextPersonPlaceholder: String {
+        L10n.isZh ? "第 \(people.count + 1) 人" : "Person \(people.count + 1)"
+    }
+
+    func renamePerson(id: UUID, to name: String) {
+        guard let person = people.first(where: { $0.id == id }) else { return }
+        person.name = name
         objectWillChange.send()
     }
     
@@ -156,42 +187,37 @@ nonisolated class SplitSession: ObservableObject {
         // prevents an accidental delete from making every total unrecordable.
         guard people.count > 1 else { return }
         people.removeAll { $0.id == id }
-        for index in sharedItems.indices {
-            sharedItems[index].involvedPersonIDs.removeAll { $0 == id }
+        for index in items.indices {
+            items[index].involvedPersonIDs.removeAll { $0 == id }
         }
         objectWillChange.send()
     }
     
     // MARK: - Item Management
-    
-    func addPersonalItem(to personID: UUID, name: String, price: Double) {
-        guard let person = people.first(where: { $0.id == personID }) else { return }
-        let item = BasketItem(name: name, price: price)
-        person.items.append(item)
+
+    /// Adds an item shared by everyone unless specific people are given.
+    func addItem(name: String, price: Double, assignedTo personIDs: [UUID]? = nil) {
+        items.append(SplitItem(name: name, price: price, involvedPersonIDs: personIDs ?? people.map(\.id)))
         objectWillChange.send()
     }
     
-    func removePersonalItem(from personID: UUID, itemID: UUID) {
-        guard let person = people.first(where: { $0.id == personID }) else { return }
-        person.items.removeAll { $0.id == itemID }
-        objectWillChange.send()
+    func addPersonalItem(to personID: UUID, name: String, price: Double) {
+        guard people.contains(where: { $0.id == personID }) else { return }
+        addItem(name: name, price: price, assignedTo: [personID])
     }
     
     func addSharedItem(name: String, price: Double) {
-        let allIDs = people.map { $0.id }
-        let item = SharedItem(name: name, price: price, involvedPersonIDs: allIDs)
-        sharedItems.append(item)
+        addItem(name: name, price: price)
+    }
+    
+    func removeItem(id: UUID) {
+        items.removeAll { $0.id == id }
         objectWillChange.send()
     }
     
-    func removeSharedItem(id: UUID) {
-        sharedItems.removeAll { $0.id == id }
-        objectWillChange.send()
-    }
-    
-    func togglePersonInSharedItem(itemID: UUID, personID: UUID) {
-        guard let index = sharedItems.firstIndex(where: { $0.id == itemID }) else { return }
-        var ids = sharedItems[index].involvedPersonIDs
+    func togglePerson(_ personID: UUID, inItem itemID: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == itemID }) else { return }
+        var ids = items[index].involvedPersonIDs
         
         if ids.contains(personID) {
             ids.removeAll { $0 == personID }
@@ -199,7 +225,46 @@ nonisolated class SplitSession: ObservableObject {
             ids.append(personID)
         }
         
-        sharedItems[index].involvedPersonIDs = ids
+        items[index].involvedPersonIDs = ids
+        objectWillChange.send()
+    }
+
+    func isEveryoneIncluded(in item: SplitItem) -> Bool {
+        peopleIncluded(in: item).count == people.count
+    }
+
+    /// Selects everyone, or clears the item when everyone was already chosen.
+    func toggleEveryone(inItem itemID: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == itemID }) else { return }
+        items[index].involvedPersonIDs = isEveryoneIncluded(in: items[index]) ? [] : people.map(\.id)
+        objectWillChange.send()
+    }
+
+    /// Fills the bill from a scanned receipt. Items start shared by everyone;
+    /// a printed tip becomes a fixed tip so nothing is counted twice.
+    func apply(_ draft: ReceiptDraft, replacingItems: Bool) {
+        let everyone = people.map(\.id)
+        let newItems = draft.itemsForSplit().map {
+            SplitItem(name: $0.name, price: $0.price.amount, involvedPersonIDs: everyone)
+        }
+        let scannedTax = draft.taxForSplit ?? .zero
+        if replacingItems {
+            items = newItems
+            taxAmount = scannedTax > .zero ? scannedTax.amount : nil
+        } else {
+            items += newItems
+            let combined = money(taxAmount ?? 0) + scannedTax
+            taxAmount = combined > .zero ? combined.amount : nil
+        }
+        if let tip = draft.tip, tip > .zero {
+            let combined = replacingItems || tipSelection != TipPreset.fixedAmount
+                ? tip : money(customFixedTip ?? 0) + tip
+            tipSelection = TipPreset.fixedAmount
+            customFixedTip = combined.amount
+        } else if replacingItems && draft.expectsNoTip {
+            tipSelection = TipPreset.none
+        }
+        if replacingItems || merchant == nil { merchant = draft.merchant }
         objectWillChange.send()
     }
     
@@ -209,28 +274,27 @@ nonisolated class SplitSession: ObservableObject {
         Money(value)
     }
 
-    private func peopleIncluded(in item: SharedItem) -> [SplitPerson] {
+    func peopleIncluded(in item: SplitItem) -> [SplitPerson] {
         // Always use the visible people order so an unavoidable extra cent is
         // allocated predictably and the same on every redraw.
         people.filter { item.involvedPersonIDs.contains($0.id) }
     }
 
-    var hasUnallocatedSharedItems: Bool {
-        sharedItems.contains { peopleIncluded(in: $0).isEmpty }
+    var hasUnallocatedItems: Bool {
+        items.contains { peopleIncluded(in: $0).isEmpty }
     }
 
     var hasInvalidAmounts: Bool {
         taxAmount.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? false
         || customFixedTip.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? false
         || customTipPercentage.map { $0 < 0 } ?? false
-        || people.flatMap(\.items).contains { !ExpenseInputValidator.isValidLineItemAmount($0.price) }
-        || sharedItems.contains { !ExpenseInputValidator.isValidLineItemAmount($0.price) }
+        || items.contains { !ExpenseInputValidator.isValidLineItemAmount($0.price) }
     }
 
     var settlementValidationMessage: String? {
         if people.isEmpty { return L10n.isZh ? "请至少保留一位参与者" : "Add at least one participant." }
         if hasInvalidAmounts { return L10n.isZh ? "请输入大于 0 的金额" : "Enter amounts greater than zero." }
-        if hasUnallocatedSharedItems { return L10n.isZh ? "请为每个共享项目选择参与者" : "Choose people for every shared item." }
+        if hasUnallocatedItems { return L10n.isZh ? "请为每个项目选择参与者" : "Choose who shares every item." }
         if sessionSubtotalMoney <= .zero { return L10n.isZh ? "请先添加至少一项消费" : "Add at least one item before settling." }
         return nil
     }
@@ -243,28 +307,25 @@ nonisolated class SplitSession: ObservableObject {
         people.count > 1
     }
 
-    func sharedItemShares(for personID: UUID) -> [SharedItemShare] {
-        sharedItems.compactMap { item in
+    /// Every item this person takes part in, with their exact share.
+    func itemShares(for personID: UUID) -> [ItemShare] {
+        items.compactMap { item in
             let recipients = peopleIncluded(in: item)
             guard let index = recipients.firstIndex(where: { $0.id == personID }) else { return nil }
             let allocation = Money.splitEvenly(money(item.price), among: recipients.count)
-            return SharedItemShare(id: item.id, name: item.name, total: money(item.price),
-                                   share: allocation[index], peopleCount: recipients.count,
-                                   participantNames: recipients.map(\.name))
+            return ItemShare(id: item.id, name: item.name, total: money(item.price),
+                             share: allocation[index], peopleCount: recipients.count,
+                             participantNames: recipients.map(\.name))
         }
     }
 
-    private func sharedPortionMoney(for personID: UUID) -> Money {
-        sharedItemShares(for: personID).reduce(.zero) { $0 + $1.share }
-    }
-
+    /// The part of this person's subtotal that comes from shared items.
     func sharedPortion(for personID: UUID) -> Double {
-        sharedPortionMoney(for: personID).amount
+        itemShares(for: personID).filter(\.isShared).reduce(Money.zero) { $0 + $1.share }.amount
     }
 
     private func subtotalMoney(for person: SplitPerson) -> Money {
-        let personal = person.items.reduce(.zero) { $0 + money($1.price) }
-        return personal + sharedPortionMoney(for: person.id)
+        itemShares(for: person.id).reduce(.zero) { $0 + $1.share }
     }
 
     func subtotal(for person: SplitPerson) -> Double {
@@ -272,9 +333,7 @@ nonisolated class SplitSession: ObservableObject {
     }
 
     private var sessionSubtotalMoney: Money {
-        let personal = people.flatMap(\.items).reduce(.zero) { $0 + money($1.price) }
-        let shared = sharedItems.reduce(.zero) { $0 + money($1.price) }
-        return personal + shared
+        items.reduce(.zero) { $0 + money($1.price) }
     }
 
     var sessionSubtotal: Double {
@@ -290,11 +349,11 @@ nonisolated class SplitSession: ObservableObject {
     }
 
     private var totalTipMoney: Money {
-        if tipSelection == -2 {
+        if tipSelection == TipPreset.fixedAmount {
             return money(customFixedTip ?? 0)
         }
 
-        let percentage = tipSelection == -1 ? (customTipPercentage ?? 0) : tipSelection
+        let percentage = tipSelection == TipPreset.customPercentage ? (customTipPercentage ?? 0) : tipSelection
         return sessionSubtotalMoney.applying(percent: percentage)
     }
 
@@ -324,29 +383,32 @@ nonisolated class SplitSession: ObservableObject {
         guard sessionSubtotalMoney > .zero else { return 0 }
         return (subtotalMoney(for: person) + (sharedCostAllocations[person.id] ?? .zero)).amount
     }
+
+    /// Tax and tip allocated to this person in proportion to their items.
+    func taxAndTip(for person: SplitPerson) -> Double {
+        (Money(finalTotal(for: person)) - subtotalMoney(for: person)).amount
+    }
     
     func generateNote(for person: SplitPerson) -> String {
-        let personalNames = person.items.map { $0.name }
+        let itemNames = itemShares(for: person.id).map { share in
+            share.isShared ? "1/\(share.peopleCount) \(share.name)" : share.name
+        }
+        let itemsStr = itemNames.joined(separator: ", ")
         
-        let sharedNames = sharedItems
-            .filter { $0.involvedPersonIDs.contains(person.id) }
-            .map { "1/\($0.involvedPersonIDs.count) \($0.name)" }
-        
-        let allItems = personalNames + sharedNames
-        let itemsStr = allItems.joined(separator: ", ")
-        
-        let summary = SplitNote.quick(total: Money(grandTotal), share: Money(finalTotal(for: person)), people: people.count)
+        var summary = SplitNote.quick(total: Money(grandTotal), share: Money(finalTotal(for: person)), people: people.count)
+        if let merchant, !merchant.isEmpty { summary = "\(merchant)\n\(summary)" }
         return itemsStr.isEmpty ? summary : "\(summary)\n\(itemsStr)"
     }
     
     func reset() {
         people.removeAll()
-        sharedItems.removeAll()
-        addPerson(name: NSLocalizedString("Me", comment: ""))
+        items.removeAll()
+        addPerson(name: Self.defaultFirstPersonName)
         taxAmount = nil
-        tipSelection = 15
+        tipSelection = TipPreset.defaultSelection
         customTipPercentage = nil
         customFixedTip = nil
+        merchant = nil
     }
 }
 
@@ -361,15 +423,16 @@ extension SplitSession {
         for person in people {
             let name = displayName(person.name)
             rows.append(.text(name, ""))
-            for item in person.items {
-                rows.append(.currency(item.name.isEmpty ? (L10n.isZh ? "个人项目" : "Personal item") : item.name, item.price))
+            let shares = itemShares(for: person.id)
+            for item in shares where !item.isShared {
+                rows.append(.currency(item.name.isEmpty ? (L10n.isZh ? "个人项目" : "Personal item") : item.name, item.share.amount))
             }
-            let shares = sharedItemShares(for: person.id)
-            if !shares.isEmpty {
+            let sharedItems = shares.filter(\.isShared)
+            if !sharedItems.isEmpty {
                 rows.append(ReceiptItem(label: L10n.isZh ? "共享分摊" : "Shared portion",
                                         value: .currency(sharedPortion(for: person.id)),
                                         style: .sharedSubtotal))
-                for item in shares {
+                for item in sharedItems {
                     rows.append(ReceiptItem(
                         label: item.name.isEmpty ? (L10n.isZh ? "共享项目" : "Shared item") : item.name,
                         value: .currency(item.share.amount), style: .detail,
@@ -384,7 +447,8 @@ extension SplitSession {
             rows.append(ReceiptItem(label: L10n.isZh ? "个人总计" : "Person total",
                                     value: .currency(final.amount), style: .personTotal))
         }
-        return ReceiptData(title: L10n.isZh ? "按人分配" : "Split by Person", items: rows,
+        let title = merchant.flatMap { $0.isEmpty ? nil : $0 } ?? (L10n.isZh ? "按人分配" : "Split by Person")
+        return ReceiptData(title: title, items: rows,
                            subtotal: sessionSubtotal, tax: totalTaxAmount, tip: totalTipAmount,
                            total: grandTotal, footer: "Generated by DailySpend")
     }

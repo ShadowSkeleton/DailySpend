@@ -270,7 +270,7 @@ struct TrendsSection: View {
                             }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.uturn.backward")
-                                    Text("Back to Today")
+                                    Text(L10n.isZh ? "回到本月" : "Back to This Month")
                                 }
                                 .font(.caption).fontWeight(.bold)
                                 .padding(.horizontal, 12).padding(.vertical, 6)

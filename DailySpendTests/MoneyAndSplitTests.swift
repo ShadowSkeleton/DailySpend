@@ -109,17 +109,19 @@ final class MoneyAndSplitTests: XCTestCase {
         session.tipSelection = 0
         session.addSharedItem(name: "Shared starter", price: 10)
         session.addSharedItem(name: "Tea", price: 0.01)
-        session.sharedItems[1].involvedPersonIDs = [session.people[0].id, session.people[1].id]
+        session.items[1].involvedPersonIDs = [session.people[0].id, session.people[1].id]
         for person in session.people {
-            let shares = session.sharedItemShares(for: person.id)
-            XCTAssertEqual(shares.reduce(Money.zero) { $0 + $1.share }, Money(session.sharedPortion(for: person.id)))
+            let shares = session.itemShares(for: person.id)
+            XCTAssertEqual(shares.reduce(Money.zero) { $0 + $1.share }, Money(session.subtotal(for: person)))
         }
-        XCTAssertEqual(session.sharedItemShares(for: session.people[0].id).map { $0.share.minorUnits }, [334, 1])
-        XCTAssertEqual(session.sharedItemShares(for: session.people[1].id).map { $0.share.minorUnits }, [333, 0])
-        XCTAssertEqual(session.sharedItemShares(for: session.people[2].id).map(\.name), ["Shared starter"])
+        XCTAssertEqual(session.itemShares(for: session.people[0].id).map { $0.share.minorUnits }, [334, 1])
+        XCTAssertEqual(session.itemShares(for: session.people[1].id).map { $0.share.minorUnits }, [333, 0])
+        XCTAssertEqual(session.itemShares(for: session.people[2].id).map(\.name), ["Shared starter"])
         session.removePerson(id: session.people[0].id)
-        XCTAssertEqual(session.people.reduce(Money.zero) { $0 + Money(session.sharedPortion(for: $1.id)) }, Money(10.01))
-        XCTAssertEqual(session.sharedItemShares(for: UUID()).count, 0)
+        // Tea now has one person left, so it counts as theirs alone; every cent
+        // is still allocated.
+        XCTAssertEqual(session.people.reduce(Money.zero) { $0 + Money(session.subtotal(for: $1)) }, Money(10.01))
+        XCTAssertEqual(session.itemShares(for: UUID()).count, 0)
     }
 
     func testDetailedReceiptIncludesItemSharesAndOneCentTaxWithoutDoubleCounting() throws {
@@ -161,18 +163,19 @@ final class MoneyAndSplitTests: XCTestCase {
         session.addPerson(name: "Not involved")
         session.tipSelection = 0
         session.addSharedItem(name: "Tea", price: 0.01)
-        session.sharedItems[0].involvedPersonIDs = [session.people[1].id, UUID(), session.people[0].id, session.people[0].id]
-        var details = session.makeReceiptData().items.filter { $0.style == .detail }
+        session.items[0].involvedPersonIDs = [session.people[1].id, UUID(), session.people[0].id, session.people[0].id]
+        let details = session.makeReceiptData().items.filter { $0.style == .detail }
         XCTAssertEqual(details.map(\.participants), [["Alex", "Alex"], ["Alex", "Alex"]])
         XCTAssertEqual(details.map(\.value), [.currency(0.01), .currency(0)])
         session.people[1].name = "  Jamie  "
         XCTAssertEqual(session.makeReceiptData().items.first { $0.style == .detail }?.participants, ["Alex", "Jamie"])
         session.removePerson(id: session.people[0].id)
         session.people[0].name = " \n "
-        details = session.makeReceiptData().items.filter { $0.style == .detail }
-        XCTAssertEqual(details.count, 1)
-        XCTAssertEqual(details[0].participants, [L10n.isZh ? "未命名" : "Guest"])
-        XCTAssertEqual(details[0].value, .currency(0.01))
+        // With one participant left, Tea is listed as that person's own item.
+        let receipt = session.makeReceiptData()
+        XCTAssertTrue(receipt.items.filter { $0.style == .detail }.isEmpty)
+        XCTAssertTrue(receipt.items.contains(.text(L10n.isZh ? "未命名" : "Guest", "")))
+        XCTAssertTrue(receipt.items.contains(.currency("Tea", 0.01)))
     }
 
     func testApprovedSharedReceiptLayoutRendersShortLongAndMultipleNames() throws {
@@ -182,7 +185,7 @@ final class MoneyAndSplitTests: XCTestCase {
         session.addPerson(name: "Alexandra Catherine Montgomery-Wellington")
         session.tipSelection = 0
         session.addSharedItem(name: "Starter", price: 6)
-        session.sharedItems[0].involvedPersonIDs = [session.people[0].id, session.people[1].id]
+        session.items[0].involvedPersonIDs = [session.people[0].id, session.people[1].id]
         session.addSharedItem(name: "Jasmine tea 茉莉花茶 for the table", price: 12)
         let receipt = session.makeReceiptData()
         XCTAssertEqual(receipt.total, 18)
@@ -209,6 +212,21 @@ final class MoneyAndSplitTests: XCTestCase {
         largeAttachment.name = "Shared receipt - long names and accessibility text"
         largeAttachment.lifetime = .keepAlways
         add(largeAttachment)
+    }
+
+    func testCategoryLimitKeepsCentsWhenShownAndSavedAgain() {
+        let us = Locale(identifier: "en_US")
+        let germany = Locale(identifier: "de_DE")
+        XCTAssertEqual(CategoryBudgetRow.displayText(for: Money(180.5), locale: us), "180.50")
+        XCTAssertEqual(CategoryBudgetRow.displayText(for: Money(180), locale: us), "180")
+        XCTAssertEqual(CategoryBudgetRow.displayText(for: Money(180.5), locale: germany), "180,50")
+        for locale in [us, germany] {
+            let shown = CategoryBudgetRow.displayText(for: Money(1234.05), locale: locale)
+            XCTAssertEqual(CategoryBudgetRow.parse(shown, locale: locale).map(Money.init), Money(1234.05))
+        }
+        XCTAssertEqual(CategoryBudgetRow.parse("12,5", locale: us), 12.5)
+        XCTAssertEqual(CategoryBudgetRow.parse("1,234.50", locale: us), 1234.5)
+        XCTAssertNil(CategoryBudgetRow.parse("abc", locale: us))
     }
 
     func testWeightedAllocationReconcilesToOriginalTotal() {
@@ -328,8 +346,9 @@ final class MoneyAndSplitTests: XCTestCase {
 
     func testUnassignedSharedItemCannotBeRecorded() {
         let session = SplitSession()
+        session.tipSelection = 15
         session.addSharedItem(name: "Unassigned", price: 10)
-        session.sharedItems[0].involvedPersonIDs = []
+        session.items[0].involvedPersonIDs = []
 
         XCTAssertFalse(session.isReadyToSettle)
         XCTAssertEqual(Money(session.grandTotal), Money(11.5))

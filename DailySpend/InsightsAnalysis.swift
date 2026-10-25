@@ -88,6 +88,12 @@ struct InsightAnalysisCard: View {
                     }
                     Spacer()
                 }
+                // The comparison window used to be explained only behind the
+                // help button; a month-to-date number needs it in plain sight.
+                Text(L10n.isZh ? "与上月同期相比" : "Compared with the same days last month")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, -8)
                 Text(signedChangeAmount(for: data))
                     .font(.system(size: 42, weight: .heavy, design: .rounded))
                     .foregroundStyle(data.isUp ? .red : .green)
@@ -215,8 +221,8 @@ struct CategoryRankingRow: View {
                         }
                     }.frame(height: 4)
                     HStack {
-                        if item.total > budget { Text("Over: \((item.total - budget).formatted(.currency(code: L10n.currencyCode)))").font(.caption2).foregroundStyle(.red) }
-                        else { Text("Budget: \(budget.formatted(.currency(code: L10n.currencyCode)))").font(.caption2).foregroundStyle(.secondary) }
+                        if item.total > budget { Text((L10n.isZh ? "超出：" : "Over: ") + (item.total - budget).formatted(.currency(code: L10n.currencyCode))).font(.caption2).foregroundStyle(.red) }
+                        else { Text((L10n.isZh ? "预算：" : "Budget: ") + budget.formatted(.currency(code: L10n.currencyCode))).font(.caption2).foregroundStyle(.secondary) }
                         Spacer()
                     }
                 }
@@ -236,7 +242,7 @@ struct CategoryRankingRow: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(expense.note.isEmpty ? item.displayName : expense.note).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
                                 if let freq = expense.frequency, freq != .none {
-                                    HStack(spacing: 2) { Image(systemName: "repeat").font(.caption2); Text("Recurring").font(.caption2) }.foregroundStyle(.secondary)
+                                    HStack(spacing: 2) { Image(systemName: "repeat").font(.caption2); Text(L10n.isZh ? "定期" : "Recurring").font(.caption2) }.foregroundStyle(.secondary)
                                 }
                             }
                             Spacer()

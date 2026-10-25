@@ -108,14 +108,82 @@ final class DailySpendUITests: XCTestCase {
         XCTAssertTrue(splitModePicker.waitForExistence(timeout: 5))
         splitModePicker.buttons["By Item"].tap()
 
-        let customTip = app.buttons["Custom %"]
-        let fixedTip = app.buttons["Fixed $"]
-        for _ in 0..<4 where !customTip.isHittable || !fixedTip.isHittable {
+        let noTip = app.buttons["tip-none"]
+        let customTip = app.buttons["tip-custom"]
+        for _ in 0..<4 where !customTip.isHittable || !noTip.isHittable {
             app.scrollViews.firstMatch.swipeUp()
         }
 
+        XCTAssertTrue(noTip.isHittable)
         XCTAssertTrue(customTip.isHittable)
-        XCTAssertTrue(fixedTip.isHittable)
+
+        // Custom holds both a percentage and a fixed amount.
+        customTip.tap()
+        let customType = app.segmentedControls["custom-tip-type"]
+        XCTAssertTrue(customType.waitForExistence(timeout: 3))
+        XCTAssertTrue(customType.buttons["%"].exists)
+        XCTAssertTrue(customType.buttons["$"].exists)
+    }
+
+    @MainActor
+    func testHomeScanFillsANewExpenseForReview() throws {
+        app.terminate()
+        app.launchArguments += ["-ui-test-receipt"]
+        app.launch()
+
+        let scan = app.buttons["home-scan-receipt"]
+        XCTAssertTrue(scan.waitForExistence(timeout: 5))
+        scan.tap()
+        if app.buttons["Choose from Photos"].waitForExistence(timeout: 1) {
+            app.buttons["Choose from Photos"].tap()
+        }
+
+        XCTAssertTrue(app.descendants(matching: .any)["receipt-draft-banner"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["expense-amount"].value as? String, "42.51")
+
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "Scanned receipt review"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["DailySpend"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["-$42.51"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testScannedReceiptFillsBothSplitModes() throws {
+        app.terminate()
+        app.launchArguments += ["-ui-test-receipt"]
+        app.launch()
+
+        let splitBillTab = navigationButton(named: "Split Bill")
+        XCTAssertTrue(splitBillTab.waitForExistence(timeout: 5))
+        splitBillTab.tap()
+
+        // Quick Split takes the bill total.
+        let quickScan = app.buttons["scan-receipt"].firstMatch
+        XCTAssertTrue(quickScan.waitForExistence(timeout: 5))
+        quickScan.tap()
+        XCTAssertEqual(app.textFields["total-bill-amount"].value as? String, "42.51")
+
+        // By Item takes every line, tax included.
+        app.segmentedControls["split-mode-picker"].buttons["By Item"].tap()
+        let itemScan = app.buttons["scan-receipt"].firstMatch
+        XCTAssertTrue(itemScan.waitForExistence(timeout: 5))
+        itemScan.tap()
+        XCTAssertTrue(app.staticTexts["Spicy Beef Noodles"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", "Dumplings")).count, 2, "Two dumplings become two assignable lines")
+
+        let noTip = app.buttons["tip-none"]
+        for _ in 0..<5 where !noTip.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        noTip.tap()
+        XCTAssertTrue(app.staticTexts["$42.51"].waitForExistence(timeout: 3))
+
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "Scanned itemized split"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor
@@ -195,7 +263,7 @@ final class DailySpendUITests: XCTestCase {
         XCTAssertTrue(addExpense.waitForExistence(timeout: 5))
         addExpense.tap()
 
-        let amountField = app.textFields["0"].firstMatch
+        let amountField = app.textFields["expense-amount"].firstMatch
         XCTAssertTrue(amountField.waitForExistence(timeout: 5))
         amountField.tap()
 
@@ -216,7 +284,7 @@ final class DailySpendUITests: XCTestCase {
     @MainActor
     private func addLongNoteExpense() throws {
         app.buttons["Add expense"].tap()
-        let amount = app.textFields["0"].firstMatch
+        let amount = app.textFields["expense-amount"].firstMatch
         XCTAssertTrue(amount.waitForExistence(timeout: 5))
         amount.tap()
         amount.typeText("57.50")

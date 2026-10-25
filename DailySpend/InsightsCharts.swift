@@ -107,10 +107,10 @@ struct SpendingTrendChart: View {
                 Chart {
                     ForEach(trendData) { item in
                         AreaMark(x: .value("Date", item.date, unit: currentGranularity), y: .value("Amount", item.amount))
-                            .interpolationMethod(.catmullRom)
+                            .interpolationMethod(.monotone)
                             .foregroundStyle(LinearGradient(colors: [themeColor.opacity(0.3), themeColor.opacity(0.0)], startPoint: .top, endPoint: .bottom))
                         LineMark(x: .value("Date", item.date, unit: currentGranularity), y: .value("Amount", item.amount))
-                            .interpolationMethod(.catmullRom).foregroundStyle(themeColor).lineStyle(StrokeStyle(lineWidth: 3))
+                            .interpolationMethod(.monotone).foregroundStyle(themeColor).lineStyle(StrokeStyle(lineWidth: 3))
                         if isDateSelected(item.date) {
                             PointMark(x: .value("Date", item.date, unit: currentGranularity), y: .value("Amount", item.amount))
                                 .foregroundStyle(themeColor).symbolSize(100)

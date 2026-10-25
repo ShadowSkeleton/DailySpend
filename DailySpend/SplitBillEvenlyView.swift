@@ -14,12 +14,15 @@ struct SplitBillEvenlyView: View {
     @State private var peopleCount: Int = 2
     
     // Tip States
-    @State private var tipSelection: Int = 15
+    @State private var tipSelection: Int = TipPreset.defaultSelection
     @State private var customTipPercentage: Int?
     @State private var customFixedTip: Double?
     
     @FocusState private var isAmountFocused: Bool
-    @FocusState private var isCustomTipFocused: Bool
+
+    // Receipt scanning
+    @State private var scanner = ReceiptScanController()
+    @State private var scannedDraft: ReceiptDraft?
     
     // New: Dedicated state for showing record sheet
     @State private var showRecordSheet: Bool = false
@@ -50,10 +53,10 @@ struct SplitBillEvenlyView: View {
     private var totalMoney: Money { Money(totalAmount) }
 
     private var tipMoney: Money {
-        if tipSelection == -2 {
+        if tipSelection == TipPreset.fixedAmount {
             return Money(customFixedTip ?? 0)
         }
-        let percentage = tipSelection == -1 ? (customTipPercentage ?? 0) : tipSelection
+        let percentage = tipSelection == TipPreset.customPercentage ? (customTipPercentage ?? 0) : tipSelection
         return totalMoney.applying(percent: percentage)
     }
 
@@ -98,7 +101,7 @@ struct SplitBillEvenlyView: View {
 
     private var canSettle: Bool {
         guard ExpenseInputValidator.isValidLineItemAmount(totalAmount) else { return false }
-        if tipSelection == -2 {
+        if tipSelection == TipPreset.fixedAmount {
             return customFixedTip.map(ExpenseInputValidator.isValidLineItemAmount) ?? false
         }
         return customTipPercentage.map { $0 >= 0 } ?? true
@@ -108,7 +111,7 @@ struct SplitBillEvenlyView: View {
         guard totalAmountText.isEmpty || ExpenseInputValidator.isValidLineItemAmount(totalAmount) else {
             return L10n.isZh ? "请输入大于 0 的账单总额" : "Enter a bill total greater than zero."
         }
-        if tipSelection == -2, !(customFixedTip.map(ExpenseInputValidator.isValidLineItemAmount) ?? false) {
+        if tipSelection == TipPreset.fixedAmount, !(customFixedTip.map(ExpenseInputValidator.isValidLineItemAmount) ?? false) {
             return L10n.isZh ? "请输入大于 0 的固定小费" : "Enter a fixed tip greater than zero."
         }
         if customTipPercentage.map({ $0 < 0 }) == true {
@@ -123,12 +126,20 @@ struct SplitBillEvenlyView: View {
     }
     
     private var recordNote: String {
-        SplitNote.quick(total: grandTotalMoney, share: Money(recordAmount), people: peopleCount)
+        let summary = SplitNote.quick(total: grandTotalMoney, share: Money(recordAmount), people: peopleCount)
+        guard let merchant = scannedDraft?.merchant, !merchant.isEmpty else { return summary }
+        return "\(merchant)\n\(summary)"
     }
     
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
+                if let draft = scannedDraft {
+                    ReceiptDraftBanner(draft: draft, context: .split, themeColor: themeColor) {
+                        withAnimation { scannedDraft = nil }
+                    }
+                    .padding(.horizontal)
+                }
                 totalInputSection
                 controlsSection
                 resultSection
@@ -140,25 +151,32 @@ struct SplitBillEvenlyView: View {
                 Spacer()
                 KeyboardDismissButton {
                     isAmountFocused = false
-                    isCustomTipFocused = false
+                    UIApplication.dismissKeyboard()
                 }
             }
         }
+        .receiptScanning(scanner, themeColor: themeColor)
         .onChange(of: resetTrigger) { _, shouldReset in
             if shouldReset {
                 withAnimation {
                     totalAmountText = ""
                     peopleCount = 2
-                    tipSelection = 15
+                    tipSelection = TipPreset.defaultSelection
                     customTipPercentage = nil
                     customFixedTip = nil
+                    scannedDraft = nil
                     updateReceipt()
                 }
                 resetTrigger = false
             }
         }
         .onChange(of: tipSelection) { _, _ in updateReceipt() }
-        .onAppear { updateReceipt() }
+        .onChange(of: customTipPercentage) { _, _ in updateReceipt() }
+        .onChange(of: customFixedTip) { _, _ in updateReceipt() }
+        .onAppear {
+            scanner.onDraft = applyScannedDraft
+            updateReceipt()
+        }
     }
     
     // MARK: - Subviews (Broken out to fix compiler timeout)
@@ -188,6 +206,8 @@ struct SplitBillEvenlyView: View {
                     }
             }
             .frame(maxWidth: .infinity, alignment: .center)
+
+            ReceiptScanButton(controller: scanner, themeColor: themeColor)
         }
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
@@ -240,70 +260,11 @@ struct SplitBillEvenlyView: View {
             
             Divider()
             
-            // Tip Selector
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label(L10n.isZh ? "小费" : "Tip", systemImage: "heart.circle.fill")
-                        .font(.headline)
-                    Spacer()
-                    Text(tipAmount.formatted(.currency(code: L10n.currencyCode)))
-                        .foregroundStyle(themeColor)
-                        .fontWeight(.bold)
-                }
-                
-                // A compact grid keeps every choice visible on a phone. The former
-                // horizontal row hid the custom choices off-screen at first glance.
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
-                    spacing: 10
-                ) {
-                    ForEach([10, 15, 18, 20], id: \.self) { pct in
-                        TipOptionButton(text: "\(pct)%", isSelected: tipSelection == pct, color: themeColor) {
-                            tipSelection = pct; updateReceipt()
-                        }
-                    }
-                    TipOptionButton(text: L10n.isZh ? "自定比例" : "Custom %", isSelected: tipSelection == -1, color: themeColor) {
-                        tipSelection = -1; updateReceipt()
-                    }
-                    TipOptionButton(text: L10n.isZh ? "固定金额" : "Fixed \(L10n.currencySymbol)", isSelected: tipSelection == -2, color: themeColor) {
-                        tipSelection = -2; updateReceipt()
-                    }
-                }
-                
-                // Custom Tip Inputs
-                if tipSelection == -1 {
-                    HStack {
-                        Text(L10n.isZh ? "输入比例" : "Enter %").font(.subheadline).foregroundStyle(.secondary)
-                        Spacer()
-                        TextField("20", value: $customTipPercentage, format: .number)
-                            .keyboardType(.numberPad)
-                            .focused($isCustomTipFocused)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                            .padding(8)
-                            .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                            .cornerRadius(8)
-                            .onChange(of: customTipPercentage) { _, _ in updateReceipt() }
-                        Text("%")
-                    }
-                } else if tipSelection == -2 {
-                    HStack {
-                        Text(L10n.isZh ? "输入金额" : "Enter Amount").font(.subheadline).foregroundStyle(.secondary)
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Text(L10n.currencySymbol).foregroundStyle(.secondary)
-                            TextField("5.00", value: $customFixedTip, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 80)
-                                .onChange(of: customFixedTip) { _, _ in updateReceipt() }
-                        }
-                        .padding(8)
-                        .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                        .cornerRadius(8)
-                    }
-                }
-            }
+            TipSelector(selection: $tipSelection,
+                        customPercentage: $customTipPercentage,
+                        fixedAmount: $customFixedTip,
+                        tipAmount: tipAmount,
+                        themeColor: themeColor)
         }
         .padding(24)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -371,7 +332,8 @@ struct SplitBillEvenlyView: View {
                         themeColor: themeColor,
                         prefilledAmount: recordAmount,
                         prefilledNote: recordNote,
-                        prefilledCategory: "Food",
+                        prefilledCategory: scannedDraft?.category ?? "Food",
+                        prefilledDate: scannedDraft?.date,
                         onSave: {
                             // 1. 立刻关闭 Sheet
                             showRecordSheet = false
@@ -395,6 +357,27 @@ struct SplitBillEvenlyView: View {
         .padding(.bottom, 50)
     }
     
+    private func applyScannedDraft(_ draft: ReceiptDraft) {
+        guard let bill = draft.billBeforeTip else {
+            scanner.errorMessage = ReceiptReadingError.nothingFound.errorDescription
+            return
+        }
+        withAnimation {
+            // Format with the person's own decimal separator so the parser
+            // reads the cents back exactly.
+            totalAmountText = bill.amount.formatted(.number.precision(.fractionLength(2)).grouping(.never))
+            if let tip = draft.tip, tip > .zero {
+                tipSelection = TipPreset.fixedAmount
+                customFixedTip = tip.amount
+            } else if draft.expectsNoTip {
+                tipSelection = TipPreset.none
+            }
+            scannedDraft = draft
+        }
+        isAmountFocused = false
+        updateReceipt()
+    }
+
     private func updateReceipt() {
         let items: [ReceiptItem] = [
             .text(L10n.isZh ? "分摊" : "Split", allocationSummary),
@@ -402,7 +385,7 @@ struct SplitBillEvenlyView: View {
         ]
         
         let data = ReceiptData(
-            title: L10n.isZh ? "平摊模式" : "Evenly Split",
+            title: scannedDraft?.merchant ?? (L10n.isZh ? "平摊模式" : "Evenly Split"),
             items: items,
             subtotal: totalAmount > 0 ? totalAmount : nil,
             tax: 0,

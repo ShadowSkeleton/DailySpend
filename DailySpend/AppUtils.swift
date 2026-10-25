@@ -166,6 +166,10 @@ nonisolated struct L10n {
     static var save: String { isZh ? "保存" : "Save" }
     static var cancel: String { isZh ? "取消" : "Cancel" }
     static var deleteTransaction: String { isZh ? "删除" : "Delete" }
+    static var deleteExpenseTitle: String { isZh ? "删除这笔支出？" : "Delete This Expense?" }
+    static var deleteExpenseMessage: String {
+        isZh ? "删除后无法撤销。只有在备份中保存过的记录才能恢复。" : "This can’t be undone. You can only get it back from a backup that includes it."
+    }
     
     // Insights
     static var spendingBreakdown: String { isZh ? "支出构成" : "Spending Breakdown" }

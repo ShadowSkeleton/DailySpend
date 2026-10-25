@@ -1,5 +1,22 @@
 # DailySpend — TestFlight notes
 
+## Version 2.0 draft — not yet uploaded
+
+Draft "What to Test" for 2.0 (15). Finalize it after the release quality and data-safety reviews and confirm the uploaded build number in App Store Connect.
+
+> DailySpend 2.0 reads receipts with Apple Intelligence, entirely on your device.
+>
+> - Tap the scan button on Home (next to +) and scan a receipt or choose a photo. Check the amount, store, date, and category before saving.
+> - In Split Bill, scan into Quick Split (total and tip) or By Item (every line, tax, and tip). Tap names on each item to choose who shared it.
+> - By Item now uses one item list: one name on an item makes it personal.
+> - New "None" tip option; Custom now covers both a percentage and a fixed amount.
+>
+> Please try receipts in different languages and layouts: long grocery receipts, restaurant bills with tips or service charges, discounts and coupons, and photos taken at an angle. Tell us when a total, item, or category is wrong (hide personal details in screenshots).
+>
+> Scanning items needs Apple Intelligence (iOS 26 or later on a supported device, turned on in Settings). Other devices still read the total. Upgrade over your current build without deleting the app, and keep a current encrypted backup.
+
+---
+
 Final testing candidate, updated September 10, 2026: version 1.0, build 14 in this checkout. Confirm the actual uploaded build number in App Store Connect; this document does not establish that a build was uploaded or approved.
 
 ## Copy-ready “What to Test”

@@ -7,7 +7,7 @@ This setup uses GitHub's standard hosted runners for a public repository, GitHub
 | Step | What you do | Why |
 |---|---|---|
 | 1. Define | Open a bug or feature issue; write acceptance criteria using fictional examples. | Agree on the expected result before coding. |
-| 2. Branch | Create a short-lived `codex/<topic>` branch from current `main`. | Keep each change separate and reviewable. |
+| 2. Branch | Create a short-lived topic branch (for example `codex/<topic>` or `claude/<topic>`) from current `main`. | Keep each change separate and reviewable. |
 | 3. Implement | Make focused changes and add meaningful relevant tests. | Verify behavior and prevent repeated bugs. |
 | 4. Check | Run the safety check and simulator tests locally. | Catch problems before sharing code. |
 | 5. Review | Open a PR; fill in tests, screenshots, and upgrade/privacy impact. | Make the change understandable and inspectable. |
@@ -42,6 +42,7 @@ Run from the repository root. No packages are installed by these commands. The r
 
 ```bash
 python3 scripts/ci/check_repository_safety.py
+python3 scripts/ci/check_agent_config.py
 python3 -m unittest discover -s scripts/ci/tests -v
 python3 scripts/ci/run_tests.py --configuration Debug --xcode-version 26.6 --ios-major 26 --output-dir /private/tmp/dailyspend-ci
 python3 scripts/ci/run_tests.py --configuration Release --xcode-version 26.6 --ios-major 26 --output-dir /private/tmp/dailyspend-ci
@@ -49,7 +50,7 @@ python3 scripts/ci/run_tests.py --configuration Release --xcode-version 26.6 --i
 
 If using another installed Xcode, explicitly supply its actual version after reviewing compatibility. For the owner's currently installed Xcode 27.0 with iOS 26 runtimes, substitute `--xcode-version 27.0 --ios-major 26`. The script downloads no runtimes. An iOS 26 simulator test under Xcode 27 does not establish iOS 27 runtime coverage.
 
-Release excludes only `testDebugDemoDataMakesDashboardAndInsightsTestable`, which exercises a Debug-only feature; Debug runs it. `ENABLE_TESTABILITY=YES` is a test-command override, not a shipping setting. CI covers the existing automated tests, not every hardware feature, historical upgrade path, or production service.
+Release excludes only the UI tests listed in `DEBUG_ONLY_UI_TESTS` in `scripts/ci/run_tests.py` (demo data and the synthetic scanned receipt), which exercise Debug-only launch arguments; Debug runs them. `ENABLE_TESTABILITY=YES` is a test-command override, not a shipping setting. CI covers the existing automated tests, not every hardware feature, historical upgrade path, or production service.
 
 ## Activate and enforce on GitHub
 
