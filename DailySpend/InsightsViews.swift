@@ -76,8 +76,10 @@ struct InsightsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // 顶部概览卡片 (引用自 InsightsAnalysis.swift)
-                InsightAnalysisCard(expenses: expenses)
+                // This month at a glance; the tabs below are for digging in.
+                InsightsGlanceCard(expenses: expenses,
+                                   budget: isBudgetEnabled && budgetAmount > 0 ? Money(budgetAmount) : nil,
+                                   themeColor: themeColor)
                     .padding(.top, 16)
 
                 // Tab 切换器 (引用自 InsightsAnalysis.swift)
@@ -270,7 +272,7 @@ struct TrendsSection: View {
                             }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.uturn.backward")
-                                    Text("Back to Today")
+                                    Text(L10n.isZh ? "回到本月" : "Back to This Month")
                                 }
                                 .font(.caption).fontWeight(.bold)
                                 .padding(.horizontal, 12).padding(.vertical, 6)
@@ -295,6 +297,7 @@ struct TrendsSection: View {
                 SpendingTrendChart(
                     expenses: filteredExpenses,
                     timeRange: timeRange,
+                    summary: PeriodRecap.make(records: expenses.map(\.spendingRecord), period: summaryPeriod, budget: nil),
                     cardBackground: cardBackground,
                     themeColor: themeColor
                 )
@@ -327,6 +330,20 @@ struct TrendsSection: View {
         }
     }
     
+    /// The period the chart's total and change describe, matching the selected button.
+    private var summaryPeriod: SpendingPeriod {
+        let now = Date()
+        switch timeRange {
+        case .thisMonth: return .monthToDate(now: now)
+        case .lastMonth: return .month(containing: Calendar.current.date(byAdding: .month, value: -1, to: now) ?? now, now: now)
+        case .customMonth(let date): return .month(containing: date, now: now)
+        case .last3Months: return .recentMonths(3, now: now)
+        case .last6Months: return .recentMonths(6, now: now)
+        case .thisYear: return .yearToDate(now: now)
+        case .allTime: return .allTime(now: now)
+        }
+    }
+
     var isCustomMode: Bool {
         if case .customMonth = timeRange { return true }
         return false

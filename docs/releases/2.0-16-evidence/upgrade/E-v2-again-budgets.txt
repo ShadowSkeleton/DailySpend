@@ -1,0 +1,4 @@
+Entertainment|80.0|8000
+Food|180.0|18000
+Grocery|180.0|18000
+Transport|100.0|10000

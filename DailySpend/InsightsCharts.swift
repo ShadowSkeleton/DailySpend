@@ -6,6 +6,8 @@ import Charts
 struct SpendingTrendChart: View {
     let expenses: [Expense]
     let timeRange: InsightTimeRange // 关键：使用新的枚举类型
+    /// The period's total and how much more or less than the period before.
+    var summary: PeriodRecap? = nil
     let cardBackground: Color
     let themeColor: Color
 
@@ -79,6 +81,24 @@ struct SpendingTrendChart: View {
         }
     }
 
+    /// The selected period's total, and its change in red or green.
+    private func periodTotal(_ summary: PeriodRecap) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text(RecapText.money(summary.total)).font(.headline)
+            if let change = summary.change {
+                let isUp = change.amount > .zero
+                Text((isUp ? "+" : "−") + RecapText.money(Money(minorUnits: abs(change.amount.minorUnits))))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isUp ? .red : .green)
+                    .accessibilityLabel((isUp ? (L10n.isZh ? "多" : "Up ") : (L10n.isZh ? "少" : "Down "))
+                                        + RecapText.money(Money(minorUnits: abs(change.amount.minorUnits)))
+                                        + (L10n.isZh ? "，与" : " vs. ") + RecapText.comparisonName(summary.period))
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("trend-period-total")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -98,6 +118,8 @@ struct SpendingTrendChart: View {
                         ))
                         .font(.caption2).foregroundStyle(.secondary)
                     }
+                } else if let summary {
+                    periodTotal(summary)
                 }
             }
 
@@ -107,10 +129,10 @@ struct SpendingTrendChart: View {
                 Chart {
                     ForEach(trendData) { item in
                         AreaMark(x: .value("Date", item.date, unit: currentGranularity), y: .value("Amount", item.amount))
-                            .interpolationMethod(.catmullRom)
+                            .interpolationMethod(.monotone)
                             .foregroundStyle(LinearGradient(colors: [themeColor.opacity(0.3), themeColor.opacity(0.0)], startPoint: .top, endPoint: .bottom))
                         LineMark(x: .value("Date", item.date, unit: currentGranularity), y: .value("Amount", item.amount))
-                            .interpolationMethod(.catmullRom).foregroundStyle(themeColor).lineStyle(StrokeStyle(lineWidth: 3))
+                            .interpolationMethod(.monotone).foregroundStyle(themeColor).lineStyle(StrokeStyle(lineWidth: 3))
                         if isDateSelected(item.date) {
                             PointMark(x: .value("Date", item.date, unit: currentGranularity), y: .value("Amount", item.amount))
                                 .foregroundStyle(themeColor).symbolSize(100)

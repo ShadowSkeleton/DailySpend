@@ -114,6 +114,17 @@ final class Expense {
         return SplitNote.readableLegacyNote(visibleNote)
     }
 
+    /// The first line of the note, for lists such as Home and Insights.
+    /// Scanned notes start with the store name; the full note, including
+    /// items and split details, stays in the editor.
+    var notePreview: String {
+        displayNote
+            .split(whereSeparator: \.isNewline)
+            .lazy
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? ""
+    }
+
     var money: Money {
         amountMinorUnits.map(Money.init(minorUnits:)) ?? Money(amount)
     }
@@ -155,5 +166,12 @@ final class Expense {
     
     var icon: String {
         Expense.categories.first(where: { $0.name == category })?.icon ?? "questionmark.circle"
+    }
+}
+
+extension Expense {
+    /// The values Insights' summaries need, apart from the stored model.
+    var spendingRecord: SpendingRecord {
+        SpendingRecord(money: money, category: category, note: note, date: date)
     }
 }

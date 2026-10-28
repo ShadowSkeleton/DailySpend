@@ -1,0 +1,86 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Log an expense in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在${applicationName}里记一笔"
+          }
+        }
+      }
+    },
+    "Add an expense in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用${applicationName}记账"
+          }
+        }
+      }
+    },
+    "Record spending in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在${applicationName}里记账"
+          }
+        }
+      }
+    },
+    "Scan a receipt with ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用${applicationName}扫描收据"
+          }
+        }
+      }
+    },
+    "Scan a receipt in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在${applicationName}里扫描收据"
+          }
+        }
+      }
+    },
+    "How much have I spent this month in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我这个月在${applicationName}花了多少"
+          }
+        }
+      }
+    },
+    "What did I spend this month in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}本月花了多少"
+          }
+        }
+      }
+    },
+    "${applicationName} spending this month": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}本月支出"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

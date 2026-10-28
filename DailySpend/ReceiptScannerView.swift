@@ -7,13 +7,15 @@ import VisionKit
 /// Vision intentionally stays responsible for reading the receipt. This parser
 /// only ranks the already-recognized lines, so amounts are deterministic,
 /// inspectable, and never sent off-device.
-enum ReceiptAmountParser {
-    struct Line: Equatable {
+nonisolated enum ReceiptAmountParser {
+    struct Line: Equatable, Sendable {
         let text: String
         let boundingBox: CGRect
     }
 
-    private static let centsPattern = #"(?:[$€£¥]\s*)?((?:\d{1,3}(?:,\d{3})*|\d+)\.\d{2})(?!\d)"#
+    /// Two decimal places after a point or a comma, so "12.50", "1,224.50",
+    /// "12,00 €", and "1.234,56" all count as prices.
+    private static let centsPattern = #"(?:[$€£¥]\s*)?((?:\d{1,3}(?:[,.]\d{3})+|\d+)[.,]\d{2})(?!\d)"#
     static func bestAmount(from lines: [Line]) -> Double? {
         let candidates = lines.compactMap { line -> (line: Line, amount: Double, priority: Int)? in
             guard let amount = currencyAmount(in: line.text) else { return nil }
@@ -76,7 +78,7 @@ enum ReceiptAmountParser {
             return nil
         }
 
-        return Double(text[amountRange].replacingOccurrences(of: ",", with: ""))
+        return ReceiptNumberParser.money(from: String(text[amountRange]))?.amount
     }
 
     private static func labelPriority(for text: String) -> Int {
@@ -97,120 +99,57 @@ enum ReceiptAmountParser {
     }
 }
 
+/// Presents the system document camera and returns every captured page.
+/// Reading happens after the camera closes, so its progress can be shown and
+/// cancelled in DailySpend's own interface.
 struct ReceiptScannerView: UIViewControllerRepresentable {
-    @Binding var scannedAmount: Double?
-    @Binding var scanErrorMessage: String?
-    @Environment(\.dismiss) var dismiss
-    
+    var onCapture: ([ReceiptPage]) -> Void
+    var onCancel: () -> Void
+    var onError: (String) -> Void
+
+    /// The document camera is unavailable in Simulator and on some iPads.
+    static var isSupported: Bool { VNDocumentCameraViewController.isSupported }
+
     func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
         let scanner = VNDocumentCameraViewController()
         scanner.delegate = context.coordinator
         return scanner
     }
-    
+
     func updateUIViewController(_ uiViewController: VNDocumentCameraViewController, context: Context) {}
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
-    class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
-        var parent: ReceiptScannerView
-        
+
+    final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
+        let parent: ReceiptScannerView
+
         init(_ parent: ReceiptScannerView) {
             self.parent = parent
         }
-        
+
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-            guard scan.pageCount >= 1 else {
-                finish(controller, errorMessage: "No receipt was captured. You can enter the amount manually.")
-                return
+            // Long receipts are often captured in several pages. A small cap
+            // keeps reading fast and the recognized text within model limits.
+            let pages = (0..<min(scan.pageCount, 4)).compactMap { index in
+                scan.imageOfPage(at: index).cgImage.map { ReceiptPage(image: $0, orientation: .up) }
             }
-            
-            let image = scan.imageOfPage(at: 0)
-            processImage(image, controller: controller)
-        }
-        
-        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
-            controller.dismiss(animated: true)
-        }
-        
-        func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
-            finish(
-                controller,
-                errorMessage: "DailySpend couldn’t use the camera. Check Camera access in Settings, then try again."
-            )
-        }
-        
-        // MARK: - 核心 AI 算法
-        func processImage(_ image: UIImage, controller: VNDocumentCameraViewController) {
-            guard let cgImage = image.cgImage else {
-                finish(controller, errorMessage: "This receipt image couldn’t be read. You can enter the amount manually.")
-                return
-            }
-            
-            let request = VNRecognizeTextRequest { [weak self] request, error in
-                guard let self = self else { return }
-                
-                guard let observations = request.results as? [VNRecognizedTextObservation], error == nil else {
-                    self.finish(
-                        controller,
-                        errorMessage: "DailySpend couldn’t read that receipt. You can enter the amount manually."
-                    )
-                    return
-                }
-                
-                var recognizedLines: [ReceiptAmountParser.Line] = []
-                
-                for observation in observations {
-                    guard let candidate = observation.topCandidates(1).first else { continue }
-                    recognizedLines.append(
-                        ReceiptAmountParser.Line(
-                            text: candidate.string,
-                            boundingBox: observation.boundingBox
-                        )
-                    )
-                }
-                
-                let bestGuess = ReceiptAmountParser.bestAmount(from: recognizedLines)
-                
-                if let result = bestGuess {
-                    DispatchQueue.main.async {
-                        self.parent.scannedAmount = result
-                        controller.dismiss(animated: true)
-                    }
-                } else {
-                    self.finish(
-                        controller,
-                        errorMessage: "No total was found on this receipt. You can enter the amount manually."
-                    )
-                }
-            }
-            
-            // 配置 OCR 参数
-            request.recognitionLevel = .accurate // 必须用精准模式
-            request.usesLanguageCorrection = true
-            request.recognitionLanguages = ["en-US", "zh-Hans", "zh-Hant"] // 支持中文小票
-            
-            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up)
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    try handler.perform([request])
-                } catch {
-                    self.finish(
-                        controller,
-                        errorMessage: "DailySpend couldn’t process that receipt. You can enter the amount manually."
-                    )
-                }
+            if pages.isEmpty {
+                parent.onError(L10n.isZh ? "没有拍到收据。你可以手动输入金额。" : "No receipt was captured. You can enter the amount manually.")
+            } else {
+                parent.onCapture(pages)
             }
         }
 
-        private func finish(_ controller: VNDocumentCameraViewController, errorMessage: String) {
-            DispatchQueue.main.async {
-                self.parent.scanErrorMessage = errorMessage
-                controller.dismiss(animated: true)
-            }
+        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+            parent.onCancel()
         }
-        
+
+        func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
+            parent.onError(L10n.isZh
+                ? "DailySpend 无法使用相机。请在“设置”中检查相机权限后重试。"
+                : "DailySpend couldn’t use the camera. Check Camera access in Settings, then try again.")
+        }
     }
 }

@@ -6,6 +6,7 @@ struct HomeView: View {
     let themeColor: Color
     var onOpenSplitBill: () -> Void = { }
     @Binding var pendingQuickAdd: Bool
+    @Binding var pendingScan: Bool
     var canOpenQuickAdd: Bool
     let backgroundColor = Color(uiColor: .systemGroupedBackground)
     
@@ -15,16 +16,19 @@ struct HomeView: View {
     
     private enum ExpenseSheet: Identifiable {
         case add
+        case review(ReceiptDraft)
         case edit(Expense)
 
         var id: String {
             switch self {
             case .add: "add"
+            case .review: "review"
             case .edit(let expense): "edit-\(expense.id)"
             }
         }
     }
     @State private var expenseSheet: ExpenseSheet?
+    @State private var scanner = ReceiptScanController()
     @State private var homeSelectedMonth = Date()
     @State private var expensePendingDeletion: Expense?
     @State private var showDeleteConfirmation = false
@@ -120,37 +124,59 @@ struct HomeView: View {
                         .accessibilityHint(L10n.isZh ? "导出当前月份的账单 CSV 文件" : "Exports this month's expenses as a CSV file.")
                     }
                 }
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    HomeScanButton(controller: scanner, themeColor: themeColor)
                     Button(action: { expenseSheet = .add }) {
                         Image(systemName: "plus").font(.system(size: 20, weight: .bold)).foregroundStyle(themeColor)
                     }
                     .accessibilityLabel(L10n.isZh ? "添加账单" : "Add expense")
-                    .accessibilityHint(L10n.isZh ? "记录一笔新支出或扫描收据" : "Record a new expense or scan a receipt.")
+                    .accessibilityHint(L10n.isZh ? "手动记录一笔新支出" : "Record a new expense.")
                 }
             }
             .sheet(item: $expenseSheet, onDismiss: openPendingQuickAdd) { sheet in
                 switch sheet {
                 case .add:
-                    AddExpenseView(themeColor: themeColor)
+                    AddExpenseView(themeColor: themeColor, onSaved: showMonth)
+                case .review(let draft):
+                    AddExpenseView(themeColor: themeColor, prefilledDraft: draft, onSaved: showMonth)
                 case .edit(let expense):
                     EditExpenseView(expense: expense, themeColor: themeColor)
                 }
             }
-            .alert("Delete this expense?", isPresented: $showDeleteConfirmation) {
+            .alert(L10n.deleteExpenseTitle, isPresented: $showDeleteConfirmation) {
                 Button(L10n.cancel, role: .cancel) { expensePendingDeletion = nil }
                 Button(L10n.deleteTransaction, role: .destructive) { deletePendingExpense() }
             } message: {
-                Text("You can restore it later only if it exists in an iCloud or JSON backup.")
+                Text(L10n.deleteExpenseMessage)
             }
-            .alert("Couldn’t Delete Expense", isPresented: $showDeleteError) {
+            .alert(L10n.isZh ? "无法删除支出" : "Couldn’t Delete Expense", isPresented: $showDeleteError) {
                 Button(L10n.ok, role: .cancel) { }
             } message: {
                 Text(deleteErrorMessage)
             }
         }
-        .onAppear { openPendingQuickAdd() }
+        .receiptScanning(scanner, themeColor: themeColor)
+        .onAppear {
+            scanner.onDraft = { draft in
+                guard expenseSheet == nil else { return }
+                expenseSheet = .review(draft)
+            }
+            openPendingQuickAdd()
+            openPendingScan()
+        }
         .onChange(of: pendingQuickAdd) { _, _ in openPendingQuickAdd() }
-        .onChange(of: canOpenQuickAdd) { _, _ in openPendingQuickAdd() }
+        .onChange(of: pendingScan) { _, _ in openPendingScan() }
+        .onChange(of: canOpenQuickAdd) { _, _ in
+            openPendingQuickAdd()
+            openPendingScan()
+        }
+    }
+
+    /// An expense dated in another month, such as an old receipt, would
+    /// otherwise save out of sight. Showing its month confirms the save.
+    private func showMonth(of date: Date) {
+        guard !Calendar.current.isDate(date, equalTo: homeSelectedMonth, toGranularity: .month) else { return }
+        withAnimation(.snappy) { homeSelectedMonth = date }
     }
 
     private func openPendingQuickAdd() {
@@ -167,6 +193,14 @@ struct HomeView: View {
         pendingQuickAdd = false
     }
     
+    /// Starts a scan asked for from Siri or Control Center, once Home is
+    /// showing, unlocked, and not already presenting something.
+    private func openPendingScan() {
+        guard pendingScan, canOpenQuickAdd, expenseSheet == nil else { return }
+        pendingScan = false
+        scanner.start(ReceiptScannerView.isSupported ? .camera : .photos)
+    }
+
     var filteredExpenses: [Expense] {
         let calendar = Calendar.current
         return expenses.filter { calendar.isDate($0.date, equalTo: homeSelectedMonth, toGranularity: .month) }
@@ -203,6 +237,38 @@ struct HomeView: View {
     }
 }
 
+/// The Home toolbar's shortcut: scan first, then review a filled-in expense.
+private struct HomeScanButton: View {
+    let controller: ReceiptScanController
+    let themeColor: Color
+
+    var body: some View {
+        Group {
+            if ReceiptScannerView.isSupported {
+                Menu {
+                    Button { controller.start(.camera) } label: {
+                        Label(L10n.isZh ? "用相机扫描" : "Scan with Camera", systemImage: "camera")
+                    }
+                    Button { controller.start(.photos) } label: {
+                        Label(L10n.isZh ? "从照片中选择" : "Choose from Photos", systemImage: "photo.on.rectangle")
+                    }
+                } label: { icon }
+            } else {
+                Button { controller.start(.photos) } label: { icon }
+            }
+        }
+        .accessibilityLabel(L10n.isZh ? "扫描收据" : "Scan receipt")
+        .accessibilityHint(L10n.isZh ? "读取收据并填写一笔新支出" : "Reads a receipt and fills in a new expense.")
+        .accessibilityIdentifier("home-scan-receipt")
+    }
+
+    private var icon: some View {
+        Image(systemName: "doc.text.viewfinder")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(themeColor)
+    }
+}
+
 // MARK: - First-use path
 private struct HomeEmptyState: View {
     let onAddExpense: () -> Void
@@ -220,7 +286,10 @@ private struct HomeEmptyState: View {
 
             VStack(spacing: 10) {
                 Button(action: onAddExpense) {
+                    // The prominent style drew the plus in the button's own
+                    // color, leaving an invisible icon and off-center text.
                     Label(L10n.isZh ? "记录第一笔支出" : "Add your first expense", systemImage: "plus")
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
@@ -305,7 +374,7 @@ struct HomeHeaderView: View {
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.uturn.backward")
-                                Text("Today")
+                                Text(L10n.isZh ? "本月" : "This Month")
                             }
                             .font(.caption).fontWeight(.bold)
                             .padding(.horizontal, 10)
@@ -494,7 +563,7 @@ struct MonthYearPicker: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            HStack { Text("Select Month").font(.headline); Spacer() }.padding(.top, 24).padding(.horizontal)
+            HStack { Text(L10n.isZh ? "选择月份" : "Select Month").font(.headline); Spacer() }.padding(.top, 24).padding(.horizontal)
             HStack(spacing: 24) {
                 Button(action: { withAnimation { displayYear -= 1 }; UIImpactFeedbackGenerator(style: .light).impactOccurred() }) { Image(systemName: "chevron.left").font(.title3.bold()).foregroundStyle(.secondary).padding(10).background(Color.gray.opacity(0.1)).clipShape(Circle()) }
                 Text(String(displayYear).replacingOccurrences(of: ",", with: "")).font(.largeTitle.bold()).frame(minWidth: 100).contentTransition(.numericText())

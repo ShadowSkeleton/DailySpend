@@ -3,6 +3,9 @@
 Use this for the signed distribution build. It does not replace a real-device
 TestFlight pass.
 
+For the tester announcement and the data-preserving transition from TestFlight
+to the public build, use [TESTER_DATA_WORKFLOW.md](TESTER_DATA_WORKFLOW.md).
+
 For step-by-step scenarios, edge cases, exact expected results, and separate pre-upload/post-upload gates, use [PRE_UPLOAD_TEST_PLAN.md](PRE_UPLOAD_TEST_PLAN.md).
 
 ## Protect current testers before updating

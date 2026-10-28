@@ -121,6 +121,46 @@ struct AppBackup: Codable {
     }
 }
 
+extension AppBackup {
+    /// Everything in the store, ready to encrypt. Settings and the 2.0 tour
+    /// both save backups through this, so their files are identical.
+    static func data(from context: ModelContext, settings: BackupSettings) throws -> Data {
+        let fetchDescriptor = FetchDescriptor<Expense>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        let expenses = try context.fetch(fetchDescriptor)
+        let budgets = try context.fetch(FetchDescriptor<CategoryBudget>())
+        let items = expenses.map {
+            ExpenseBackupItem(
+                id: $0.id,
+                amount: $0.normalizedAmount,
+                amountMinorUnits: $0.money.minorUnits,
+                category: $0.category,
+                note: $0.note,
+                date: $0.date,
+                frequency: $0.safeFrequency,
+                lastProcessedDate: $0.lastProcessedDate,
+                isRecurringChild: $0.isRecurringChild
+            )
+        }
+        let backup = AppBackup(
+            expenses: items,
+            categoryBudgets: budgets.map {
+                CategoryBudgetBackupItem(
+                    category: $0.category,
+                    amount: $0.normalizedAmount,
+                    amountMinorUnits: $0.money.minorUnits
+                )
+            },
+            settings: settings
+        )
+        let encoder = JSONEncoder()
+        // V2 uses an absolute ISO 8601 timestamp so changing time zones
+        // between export and restore cannot move an expense to another day.
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
+        return try encoder.encode(backup)
+    }
+}
+
 /// A legacy export has no stable identifiers or recurrence state. Restoring it
 /// safely must never guess which records are recurrence templates.
 struct ImportedBackup {

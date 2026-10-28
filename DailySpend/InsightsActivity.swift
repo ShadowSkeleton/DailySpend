@@ -87,7 +87,7 @@ struct CalendarView: View {
                         withAnimation(.spring()) { currentMonth = Date() }
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                     }) {
-                        HStack(spacing: 4) { Image(systemName: "arrow.uturn.backward"); Text("Today") }
+                        HStack(spacing: 4) { Image(systemName: "arrow.uturn.backward"); Text(L10n.isZh ? "本月" : "This Month") }
                             .font(.caption)
                             .fontWeight(.bold)
                             .padding(.horizontal, 10)
@@ -277,16 +277,17 @@ struct DayDetailView: View {
                                 VStack(alignment: .leading) {
                                     Text(L10n.categoryName(expense.category)).font(.subheadline).bold()
                                     if !expense.note.isEmpty {
-                                        Text(expense.note)
+                                        Text(expense.notePreview)
+                                            .lineLimit(1)
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                            .lineLimit(1)
                                     }
                                 }
                                 Spacer()
                                 Text(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode)))
                                     .font(.subheadline)
                                     .bold()
+                                    .fixedSize()
                             }
                             .padding(12)
                             .background(RoundedRectangle(cornerRadius: 12).fill(cardBackground).shadow(color: .black.opacity(0.02), radius: 4))
@@ -309,7 +310,7 @@ struct InsightsMonthYearPicker: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            HStack { Text("Select Month").font(.headline); Spacer() }
+            HStack { Text(L10n.isZh ? "选择月份" : "Select Month").font(.headline); Spacer() }
                 .padding(.top, 24)
                 .padding(.horizontal)
 

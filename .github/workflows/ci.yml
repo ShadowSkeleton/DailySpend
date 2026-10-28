@@ -41,6 +41,9 @@ jobs:
       - name: Check for credentials and private data files
         run: python3 scripts/ci/check_repository_safety.py
 
+      - name: Check Codex and Claude Code agent configuration
+        run: python3 scripts/ci/check_agent_config.py
+
       - name: Verify CI helper safety boundaries
         run: python3 -m unittest discover -s scripts/ci/tests -v
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AppIntents
 
 @main
 struct DailySpendApp: App {
@@ -17,6 +18,9 @@ struct DailySpendApp: App {
 
     init() {
         let isRunningTests = Self.isRunningAutomatedTests
+        // Before this launch writes its first preference below, so the 2.0
+        // tour can tell an update from a new install.
+        if !isRunningTests { WhatsNew.recordEarlierUse() }
         let configuration = Self.modelConfiguration(isRunningUITests: isRunningTests)
 
         do {
@@ -47,6 +51,14 @@ struct DailySpendApp: App {
             }
         }
 
+        // Siri and Shortcuts save through this same container, never a second one.
+        let sharedContainer = modelContainer
+        AppDependencyManager.shared.add(dependency: sharedContainer)
+        // Controls open the app through the same routing as Siri's Scan.
+        DailySpendDestination.openHandler = { destination in
+            AppRouter.shared.pendingAction = destination == .scan ? .scanReceipt : .addExpense
+        }
+
         #if DEBUG
         DebugSampleData.seedWhenRequested(in: modelContainer)
         #endif
@@ -68,10 +80,21 @@ struct DailySpendApp: App {
         }
     }
 
+    /// False only in the "DailySpend Test" device build, which has no iCloud
+    /// entitlement: CloudKit setup traps without one, so that build keeps a
+    /// local-only store. App Store and TestFlight builds always use iCloud.
+    static var usesCloudKit: Bool {
+        #if DAILYSPEND_DEVICE_TEST
+        return false
+        #else
+        return true
+        #endif
+    }
+
     static func modelConfiguration(isRunningUITests: Bool) -> ModelConfiguration {
         ModelConfiguration(
             isStoredInMemoryOnly: isRunningUITests,
-            cloudKitDatabase: isRunningUITests ? .none : .private(Self.cloudKitContainerIdentifier)
+            cloudKitDatabase: isRunningUITests || !usesCloudKit ? .none : .private(Self.cloudKitContainerIdentifier)
         )
     }
 

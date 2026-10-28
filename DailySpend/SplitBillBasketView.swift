@@ -1,53 +1,64 @@
 import SwiftUI
 import Combine
 
-// Global Enum
 enum SplitBasketFocusField: Hashable {
-    case sharedName, sharedPrice
-    case personName(UUID), personPrice(UUID)
+    case itemName, itemPrice, tax
 }
 
+/// Splits a bill item by item. Everyone's items live in one list; tapping
+/// names on an item chooses who shares it, so a personal item is simply an
+/// item with one name selected.
 struct SplitBillBasketView: View {
     var themeColor: Color
     @Binding var resetTrigger: Bool
     var onUpdateReceiptData: ((ReceiptData) -> Void)?
     var onRequestShare: (() -> Void)?
     var isPreparingShare = false
-    
+
     @StateObject private var session = SplitSession()
-    
+    @State private var scanner = ReceiptScanController()
+    @State private var scanStatus = ReceiptIntelligenceStatus.current
+    @State private var scannedDraft: ReceiptDraft?
+    @State private var draftAwaitingChoice: ReceiptDraft?
+
     // UI State
-    @State private var editingPersonID: UUID?
-    @State private var isSharedSectionExpanded = true
-    
-    // New Item Input State (Shared)
-    @State private var newSharedName = ""
-    @State private var newSharedPrice: Double?
+    @State private var expandedPersonID: UUID?
+    @State private var personEditor: PersonEditor?
+    @State private var personNameDraft = ""
+
+    // New Item Input State
+    @State private var newItemName = ""
+    @State private var newItemPrice: Double?
     @FocusState private var focusedField: SplitBasketFocusField?
-    
+
     // Added state to track which person is currently recording
     @State private var recordingPerson: SplitPerson?
-    
+
+    private enum PersonEditor: Identifiable {
+        case add
+        case rename(SplitPerson)
+
+        var id: String {
+            switch self {
+            case .add: "add"
+            case .rename(let person): person.id.uuidString
+            }
+        }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                // Removed Quick Add Section
-                
-                sharedPoolSection
-                    .padding(.top, 20) // Added top padding since Quick Add is gone
-                
-                peopleListSection
-                totalsSection
+            VStack(spacing: 20) {
+                scanSection.simultaneousGesture(finishItemOnTap)
+                peopleSection.simultaneousGesture(finishItemOnTap)
+                itemsSection
+                totalsSection.simultaneousGesture(finishItemOnTap)
+                summarySection.simultaneousGesture(finishItemOnTap)
                 exportSection
             }
+            .padding(.top, 8)
         }
         .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                KeyboardDismissButton { focusedField = nil }
-            }
-        }
         .background(Color(uiColor: .systemGroupedBackground))
         // Sheet for recording expense per person
         .sheet(item: $recordingPerson) { person in
@@ -56,243 +67,246 @@ struct SplitBillBasketView: View {
                 prefilledAmount: session.finalTotal(for: person),
                 prefilledNote: session.generateNote(for: person),
                 prefilledCategory: "Food",
+                prefilledDate: scannedDraft?.date,
                 onSave: {
                     recordingPerson = nil
                 }
             )
         }
+        .receiptScanning(scanner, themeColor: themeColor)
+        .confirmationDialog(
+            L10n.isZh ? "已有项目" : "This bill already has items",
+            isPresented: Binding(get: { draftAwaitingChoice != nil }, set: { if !$0 { draftAwaitingChoice = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(L10n.isZh ? "替换现有项目" : "Replace Items", role: .destructive) {
+                if let draft = draftAwaitingChoice { apply(draft, replacingItems: true) }
+            }
+            Button(L10n.isZh ? "添加到现有项目" : "Add to Items") {
+                if let draft = draftAwaitingChoice { apply(draft, replacingItems: false) }
+            }
+            Button(L10n.cancel, role: .cancel) { draftAwaitingChoice = nil }
+        } message: {
+            Text(L10n.isZh ? "要用收据中的项目替换现有项目，还是添加到列表中？" : "Replace the current items with this receipt, or add its items to the list?")
+        }
+        .alert(personEditorTitle, isPresented: Binding(get: { personEditor != nil }, set: { if !$0 { personEditor = nil } })) {
+            TextField(L10n.isZh ? "名字" : "Name", text: $personNameDraft)
+                .textInputAutocapitalization(.words)
+            Button(L10n.cancel, role: .cancel) { personEditor = nil }
+            Button(L10n.save) { commitPersonEditor() }
+        }
         .onChange(of: resetTrigger) { _, shouldReset in
             if shouldReset {
                 withAnimation {
                     session.reset()
+                    scannedDraft = nil
+                    expandedPersonID = nil
                     updateReceipt()
                 }
                 resetTrigger = false
             }
         }
         .onAppear {
+            scanStatus = .current
+            scanner.onDraft = handleScannedDraft
             updateReceipt()
         }
         .onChange(of: session.taxAmount) { _, _ in updateReceipt() }
+        // A typed item is added when the person moves on, so forgetting the
+        // + button never loses it.
+        .onChange(of: focusedField) { oldField, newField in
+            let wasEditingItem = oldField == .itemName || oldField == .itemPrice
+            let isEditingItem = newField == .itemName || newField == .itemPrice
+            if wasEditingItem && !isEditingItem { commitPendingItem() }
+        }
         .onReceive(session.objectWillChange) { _ in
             DispatchQueue.main.async { updateReceipt() }
         }
     }
-    
+
     // MARK: - Sections
-    
-    private var sharedPoolSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: { withAnimation { isSharedSectionExpanded.toggle() } }) {
-                HStack {
-                    Image(systemName: "person.3.sequence.fill")
-                        .foregroundStyle(themeColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.isZh ? "共享项目" : "Shared Items")
-                            .font(.headline).foregroundStyle(.primary)
-                        Text(L10n.isZh ? "选择谁参与分摊每一项" : "Choose who shares each item.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
+
+    private var cardBackground: some ShapeStyle {
+        Color(uiColor: .secondarySystemGroupedBackground)
+    }
+
+    @ViewBuilder
+    private var scanSection: some View {
+        if let draft = scannedDraft {
+            ReceiptDraftBanner(draft: draft, context: .split, themeColor: themeColor) {
+                withAnimation { scannedDraft = nil }
+            }
+            .padding(.horizontal)
+        } else if scanStatus.canReadItems {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.title3)
+                    .foregroundStyle(themeColor)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.isZh ? "扫描收据" : "Scan a receipt")
+                        .font(.subheadline.weight(.semibold))
+                    Text(L10n.isZh ? "自动填写项目、税和小费" : "Fill in items, tax, and tip automatically")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isSharedSectionExpanded ? 90 : 0))
                 }
-                .padding()
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                Spacer(minLength: 8)
+                ReceiptScanButton(controller: scanner, themeColor: themeColor, title: L10n.isZh ? "扫描" : "Scan")
             }
-            .accessibilityLabel(L10n.isZh ? "共享项目" : "Shared items")
-            .accessibilityHint(L10n.isZh ? "展开后可添加项目并选择参与者" : "Expand to add items and choose participants.")
-            
-            if isSharedSectionExpanded {
-                Divider()
-                VStack(spacing: 0) {
-                    ForEach(session.sharedItems) { item in
-                        SharedItemRow(item: item, session: session, people: session.people, themeColor: themeColor) {
-                            session.removeSharedItem(id: item.id)
-                            updateReceipt()
-                        } updateReceipt: {
-                            updateReceipt()
-                        }
-                        Divider().padding(.leading, 16)
-                    }
-                    
-                    // Add Shared Item Input
-                    HStack(spacing: 12) {
-                        TextField(L10n.isZh ? "共享菜品名" : "Shared Item Name", text: $newSharedName)
-                            .submitLabel(.next)
-                            .focused($focusedField, equals: .sharedName)
-                            .onSubmit { focusedField = .sharedPrice }
-                        
-                        HStack(spacing: 2) {
-                            Text(L10n.currencySymbol).font(.caption).foregroundStyle(.secondary)
-                            TextField("0", value: $newSharedPrice, format: .number)
-                                .keyboardType(.decimalPad)
-                                .focused($focusedField, equals: .sharedPrice)
-                                .frame(width: 60)
-                        }
-                        .padding(8)
-                        .background(Color(uiColor: .systemBackground))
-                        .cornerRadius(8)
-                        
-                        Button(action: addSharedItem) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title)
-                                .foregroundStyle(themeColor)
-                        }
-                        .disabled(newSharedPrice.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? true)
-                        .accessibilityLabel(L10n.isZh ? "添加共享项目" : "Add shared item")
-                    }
-                    .padding()
-                    .background(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.3))
+            .padding(16)
+            .background(cardBackground, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal)
+        } else if scanStatus == .appleIntelligenceOff || scanStatus == .modelDownloading {
+            Label(scanStatus == .appleIntelligenceOff
+                  ? (L10n.isZh ? "开启 Apple 智能后，可扫描收据自动填写项目。" : "Turn on Apple Intelligence to scan receipts into items.")
+                  : (L10n.isZh ? "Apple 智能下载完成后，即可扫描收据。" : "Receipt scanning will be ready when Apple Intelligence finishes downloading."),
+                  systemImage: "sparkles")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+        }
+    }
+
+    private var peopleSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label(L10n.isZh ? "参与者" : "People", systemImage: "person.2.fill")
+                    .font(.headline)
+                Spacer()
+                Text("\(session.people.count)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            FlowLayout(spacing: 8) {
+                ForEach(session.people) { person in
+                    PersonMenuChip(person: person, themeColor: themeColor, canRemove: session.canRemovePerson,
+                                   onRename: {
+                                       personNameDraft = person.name
+                                       personEditor = .rename(person)
+                                   },
+                                   onRemove: {
+                                       withAnimation { session.removePerson(id: person.id) }
+                                   })
                 }
+                Button {
+                    personNameDraft = ""
+                    personEditor = .add
+                } label: {
+                    Label(L10n.isZh ? "添加" : "Add", systemImage: "plus")
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .foregroundStyle(themeColor)
+                        .overlay(Capsule().strokeBorder(themeColor.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4])))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.isZh ? "添加参与者" : "Add person")
+                .accessibilityIdentifier("split-add-person")
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(uiColor: .secondarySystemGroupedBackground)).shadow(color: .black.opacity(0.05), radius: 5))
+        .padding(16)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
     }
-    
-    private var peopleListSection: some View {
-        VStack(spacing: 16) {
-            ForEach(session.people) { person in
-                PersonBasketCard(
-                    person: person,
-                    session: session,
-                    isEditing: editingPersonID == person.id,
-                    themeColor: themeColor,
-                    focusedField: $focusedField,
-                    onToggleEdit: {
-                        withAnimation {
-                            editingPersonID = (editingPersonID == person.id) ? nil : person.id
-                        }
-                    },
-                    onAddItem: { name, price in
-                        session.addPersonalItem(to: person.id, name: name, price: price)
-                        updateReceipt()
-                    },
-                    onRemoveItem: { itemID in
-                        session.removePersonalItem(from: person.id, itemID: itemID)
-                        updateReceipt()
-                    },
-                    onDeletePerson: {
-                        withAnimation {
-                            session.removePerson(id: person.id)
-                            updateReceipt()
-                        }
-                    },
-                    onRecord: {
-                        // Directly assign recordingPerson to present the AddExpenseView sheet with fresh data
-                        recordingPerson = person
-                    },
-                    canDeletePerson: session.canRemovePerson,
-                    canRecord: session.isReadyToSettle
-                )
-            }
-            
-            Button(action: {
-                withAnimation {
-                    session.addPerson(name: "")
-                    updateReceipt()
-                    if let last = session.people.last { editingPersonID = last.id }
-                }
-            }) {
+
+    private var itemsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Image(systemName: "person.badge.plus")
-                    Text(L10n.isZh ? "添加参与者" : "Add Person to Bill")
+                    Label(L10n.isZh ? "项目" : "Items", systemImage: "list.bullet.rectangle.portrait.fill")
+                        .font(.headline)
+                    Spacer()
+                    if !session.items.isEmpty {
+                        Text(session.sessionSubtotal.formatted(.currency(code: L10n.currencyCode)))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
                 }
-                .font(.headline)
-                .foregroundStyle(themeColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+                Text(L10n.isZh ? "点选名字来选择谁分摊每一项。只选一人即为个人项目。" : "Tap names to choose who shares each item. One name makes it personal.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            .padding(16)
+
+            ForEach(session.items) { item in
+                Divider().padding(.leading, 16)
+                SplitItemRow(item: item, session: session, themeColor: themeColor) {
+                    withAnimation { session.removeItem(id: item.id) }
+                }
+                .simultaneousGesture(finishItemOnTap)
+            }
+
+            Divider()
+            // Add Item Input
+            HStack(spacing: 12) {
+                TextField(L10n.isZh ? "项目名称" : "Item name", text: $newItemName)
+                    .submitLabel(hasPendingItem ? .done : .next)
+                    .focused($focusedField, equals: .itemName)
+                    .onSubmit { hasPendingItem ? addItem() : (focusedField = .itemPrice) }
+                    .accessibilityIdentifier("split-item-name")
+
+                HStack(spacing: 2) {
+                    Text(L10n.currencySymbol).font(.caption).foregroundStyle(.secondary)
+                    TextField("0", value: $newItemPrice, format: .number)
+                        .keyboardType(.decimalPad)
+                        .focused($focusedField, equals: .itemPrice)
+                        .frame(width: 64)
+                        .accessibilityLabel(L10n.isZh ? "项目价格" : "Item price")
+                        .accessibilityIdentifier("split-item-price")
+                }
+                .padding(8)
+                .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 8))
+
+                Button(action: addItem) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title)
+                        .foregroundStyle(themeColor)
+                }
+                .disabled(!hasPendingItem)
+                .accessibilityLabel(L10n.isZh ? "添加项目" : "Add item")
+                .accessibilityIdentifier("split-add-item")
+            }
+            .padding(16)
+            .background(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.3))
         }
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
     }
-    
+
     private var totalsSection: some View {
         VStack(spacing: 16) {
             HStack {
                 Label(L10n.isZh ? "税费" : "Tax", systemImage: "building.columns.fill")
                     .font(.headline)
                 Spacer()
-                TextField("0", value: $session.taxAmount, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(minWidth: 50)
-                    .padding(8)
-                    .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                    .cornerRadius(8)
+                HStack(spacing: 4) {
+                    Text(L10n.currencySymbol).foregroundStyle(.secondary)
+                    TextField("0", value: $session.taxAmount, format: .number)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .tax)
+                        .accessibilityLabel(L10n.isZh ? "税费金额" : "Tax amount")
+                }
+                .frame(width: 110)
+                .padding(8)
+                .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
             }
-            
+
             Divider()
-            
-            // Tip Selector UI
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label(L10n.isZh ? "小费" : "Tip", systemImage: "heart.fill")
-                        .font(.headline)
-                    Spacer()
-                    Text(session.totalTipAmount.formatted(.currency(code: L10n.currencyCode)))
-                        .foregroundStyle(themeColor)
-                        .fontWeight(.bold)
-                }
-                
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
-                    spacing: 10
-                ) {
-                    ForEach([10, 15, 18, 20], id: \.self) { pct in
-                        TipOptionButton(text: "\(pct)%", isSelected: session.tipSelection == pct, color: themeColor) {
-                            session.tipSelection = pct; updateReceipt()
-                        }
-                    }
-                    TipOptionButton(text: L10n.isZh ? "自定比例" : "Custom %", isSelected: session.tipSelection == -1, color: themeColor) {
-                        session.tipSelection = -1; updateReceipt()
-                    }
-                    TipOptionButton(text: L10n.isZh ? "固定金额" : "Fixed \(L10n.currencySymbol)", isSelected: session.tipSelection == -2, color: themeColor) {
-                        session.tipSelection = -2; updateReceipt()
-                    }
-                }
-                
-                // Custom Inputs
-                if session.tipSelection == -1 {
-                    HStack {
-                        Text(L10n.isZh ? "输入比例" : "Enter %").font(.subheadline).foregroundStyle(.secondary)
-                        Spacer()
-                        TextField("20", value: $session.customTipPercentage, format: .number)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                            .padding(8)
-                            .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                            .cornerRadius(8)
-                        Text("%")
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                } else if session.tipSelection == -2 {
-                    HStack {
-                        Text(L10n.isZh ? "输入金额" : "Enter Amount").font(.subheadline).foregroundStyle(.secondary)
-                        Spacer()
-                        HStack(spacing: 2) {
-                            Text(L10n.currencySymbol).foregroundStyle(.secondary)
-                            TextField("5.00", value: $session.customFixedTip, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 80)
-                        }
-                        .padding(8)
-                        .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                        .cornerRadius(8)
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            
+
+            TipSelector(selection: $session.tipSelection,
+                        customPercentage: $session.customTipPercentage,
+                        fixedAmount: $session.customFixedTip,
+                        tipAmount: session.totalTipAmount,
+                        themeColor: themeColor,
+                        calculator: session.tipCalculator)
+
             Divider()
 
             if let message = session.settlementValidationMessage {
@@ -302,7 +316,7 @@ struct SplitBillBasketView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityLabel(message)
             }
-            
+
             HStack {
                 Text(L10n.isZh ? "总计" : "Grand Total")
                     .font(.title3).fontWeight(.bold)
@@ -310,16 +324,50 @@ struct SplitBillBasketView: View {
                 Text(session.grandTotal.formatted(.currency(code: L10n.currencyCode)))
                     .font(.title2).fontWeight(.heavy)
                     .foregroundStyle(themeColor)
+                    .contentTransition(.numericText())
             }
         }
         .padding(20)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .cornerRadius(16)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
     }
-    
+
+    private var summarySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L10n.isZh ? "每人应付" : "Each Person Pays")
+                .font(.headline)
+                .padding(.horizontal, 4)
+            ForEach(session.people) { person in
+                PersonTotalCard(
+                    person: person,
+                    session: session,
+                    isExpanded: expandedPersonID == person.id,
+                    themeColor: themeColor,
+                    canRecord: session.isReadyToSettle,
+                    onToggle: {
+                        withAnimation(.snappy) {
+                            expandedPersonID = expandedPersonID == person.id ? nil : person.id
+                        }
+                    },
+                    onRecord: {
+                        commitPendingItem()
+                        UIApplication.dismissKeyboard()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            // Use the freshest computed value when the sheet opens.
+                            recordingPerson = person
+                        }
+                    }
+                )
+            }
+        }
+        .padding(.horizontal)
+    }
+
     private var exportSection: some View {
-        Button(action: { onRequestShare?() }) {
+        Button(action: {
+            commitPendingItem()
+            onRequestShare?()
+        }) {
             HStack {
                 Image(systemName: "square.and.arrow.up")
                 Text(L10n.isZh ? "导出收据" : "Share Receipt")
@@ -339,21 +387,85 @@ struct SplitBillBasketView: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 50)
     }
-    
+
     // MARK: - Logic Methods
-    
-    private func addSharedItem() {
-        guard let price = newSharedPrice,
-              ExpenseInputValidator.isValidLineItemAmount(price) else { return }
-        session.addSharedItem(name: newSharedName, price: price)
-        newSharedName = ""
-        newSharedPrice = nil
-        focusedField = .sharedName
-        updateReceipt()
+
+    /// Tapping anywhere outside the add row finishes the item being typed,
+    /// like tapping outside a form closes its keyboard.
+    private var finishItemOnTap: some Gesture {
+        TapGesture().onEnded {
+            if isEditingNewItem { focusedField = nil }
+        }
     }
-    
+
+    private var isEditingNewItem: Bool {
+        focusedField == .itemName || focusedField == .itemPrice
+    }
+
+    private var hasPendingItem: Bool {
+        newItemPrice.map(ExpenseInputValidator.isValidLineItemAmount) ?? false
+    }
+
+    /// Adds the item and keeps the cursor in the add row for the next one.
+    private func addItem() {
+        guard commitPendingItem() else { return }
+        focusedField = .itemName
+    }
+
+    /// Adds the typed item, if it has a price, and clears the add row.
+    @discardableResult
+    private func commitPendingItem() -> Bool {
+        guard let price = newItemPrice, hasPendingItem else { return false }
+        withAnimation { session.addItem(name: newItemName.trimmingCharacters(in: .whitespacesAndNewlines), price: price) }
+        newItemName = ""
+        newItemPrice = nil
+        return true
+    }
+
+    private var personEditorTitle: String {
+        switch personEditor {
+        case .rename: L10n.isZh ? "修改名字" : "Rename"
+        default: L10n.isZh ? "添加参与者" : "Add Person"
+        }
+    }
+
+    private func commitPersonEditor() {
+        let name = personNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch personEditor {
+        case .add:
+            withAnimation { session.addPerson(name: name.isEmpty ? session.nextPersonPlaceholder : name) }
+        case .rename(let person):
+            if !name.isEmpty { session.renamePerson(id: person.id, to: name) }
+        case nil:
+            break
+        }
+        personEditor = nil
+    }
+
+    private func handleScannedDraft(_ draft: ReceiptDraft) {
+        guard !draft.items.isEmpty else {
+            scanner.errorMessage = L10n.isZh
+                ? "没能从这张收据中读取项目。你可以用“快速平分”按总额分账，或手动添加项目。"
+                : "Items couldn’t be read from this receipt. Use Quick Split with the total, or add items yourself."
+            return
+        }
+        if session.items.isEmpty {
+            apply(draft, replacingItems: true)
+        } else {
+            draftAwaitingChoice = draft
+        }
+    }
+
+    private func apply(_ draft: ReceiptDraft, replacingItems: Bool) {
+        withAnimation {
+            session.apply(draft, replacingItems: replacingItems)
+            scannedDraft = draft
+        }
+        draftAwaitingChoice = nil
+    }
+
     // MARK: - Receipt Update (Detailed Version)
-    
+
     private func updateReceipt() {
         onUpdateReceiptData?(session.makeReceiptData())
     }
@@ -361,241 +473,235 @@ struct SplitBillBasketView: View {
 
 // MARK: - Subcomponents
 
-struct SharedItemRow: View {
-    let item: SharedItem
+private struct PersonMenuChip: View {
+    @ObservedObject var person: SplitPerson
+    let themeColor: Color
+    let canRemove: Bool
+    let onRename: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(action: onRename) {
+                Label(L10n.isZh ? "修改名字" : "Rename", systemImage: "pencil")
+            }
+            Button(role: .destructive, action: onRemove) {
+                Label(L10n.isZh ? "移除" : "Remove", systemImage: "person.badge.minus")
+            }
+            .disabled(!canRemove)
+        } label: {
+            HStack(spacing: 6) {
+                PersonAvatar(name: displayName, color: themeColor.opacity(0.85), size: 22)
+                Text(displayName)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+            }
+            .padding(.leading, 4)
+            .padding(.trailing, 12)
+            .padding(.vertical, 4)
+            .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+        }
+        .tint(.primary)
+        .accessibilityLabel(displayName)
+        .accessibilityHint(L10n.isZh ? "修改名字或移除" : "Rename or remove")
+    }
+
+    private var displayName: String {
+        let trimmed = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? (L10n.isZh ? "未命名" : "Guest") : trimmed
+    }
+}
+
+struct SplitItemRow: View {
+    let item: SplitItem
     @ObservedObject var session: SplitSession
-    let people: [SplitPerson]
     let themeColor: Color
     var onDelete: () -> Void
-    var updateReceipt: () -> Void
-    
+
     var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(item.name.isEmpty ? "Shared Item" : item.name)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.name.isEmpty ? (L10n.isZh ? "项目" : "Item") : item.name)
                         .fontWeight(.medium)
-                    Text(item.price.formatted(.currency(code: L10n.currencyCode)))
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text(priceCaption)
+                        .font(.caption)
+                        .foregroundStyle(sharers.isEmpty ? Color.orange : Color.secondary)
+                        .monospacedDigit()
                 }
                 Spacer()
                 Button(action: onDelete) {
                     Image(systemName: "trash").foregroundStyle(.red.opacity(0.6))
                 }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(L10n.isZh ? "删除项目" : "Delete item")
             }
-            .padding(.horizontal)
-            .padding(.top, 12)
-            
-            // Avatar Selector
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(people) { person in
-                        let isSelected = item.involvedPersonIDs.contains(person.id)
-                        Button(action: {
-                            session.togglePersonInSharedItem(itemID: item.id, personID: person.id)
-                            updateReceipt()
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? themeColor : Color.gray.opacity(0.2))
-                                    .frame(width: 32, height: 32)
-                                Text(String(person.name.prefix(1)).uppercased())
-                                    .font(.caption2).fontWeight(.bold)
-                                    .foregroundStyle(isSelected ? .white : .gray)
-                            }
-                        }
+
+            FlowLayout(spacing: 6) {
+                ForEach(session.people) { person in
+                    PersonToggleChip(title: displayName(person),
+                                     isSelected: item.involvedPersonIDs.contains(person.id),
+                                     themeColor: themeColor) {
+                        session.togglePerson(person.id, inItem: item.id)
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 12)
+                // A plain action, not another chip, so only people are ever
+                // highlighted and "everyone" is never shown twice.
+                if session.people.count > 1 {
+                    Button(isEveryone ? (L10n.isZh ? "清除" : "Clear") : (L10n.isZh ? "全选" : "Select All")) {
+                        session.toggleEveryone(inItem: item.id)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(themeColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 7)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("item-select-all")
+                }
             }
         }
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .padding(16)
+    }
+
+    private var sharers: [SplitPerson] { session.peopleIncluded(in: item) }
+
+    private var isEveryone: Bool { session.isEveryoneIncluded(in: item) }
+
+    /// Who shares the item, in words: "Everyone · $10.00 each", "Alex only".
+    private var priceCaption: String {
+        let price = item.price.formatted(.currency(code: L10n.currencyCode))
+        let count = sharers.count
+        guard count > 0 else {
+            return L10n.isZh ? "\(price) · 请选择谁分摊" : "\(price) · Choose who shares this"
+        }
+        guard count > 1 else {
+            let name = displayName(sharers[0])
+            return session.people.count > 1 ? (L10n.isZh ? "\(price) · 仅\(name)" : "\(price) · \(name) only") : price
+        }
+        let shares = Money.splitEvenly(Money(item.price), among: count)
+        let each = shares[0].amount.formatted(.currency(code: L10n.currencyCode))
+        // When cents don't divide evenly the first share is one cent larger.
+        let prefix = shares.first == shares.last ? "" : "~"
+        let who: String
+        if isEveryone {
+            who = L10n.isZh ? "所有人" : "Everyone"
+        } else if count == 2 {
+            who = L10n.isZh ? "\(displayName(sharers[0]))和\(displayName(sharers[1]))"
+                            : "\(displayName(sharers[0])) & \(displayName(sharers[1]))"
+        } else {
+            who = L10n.isZh ? "\(count) 人" : "\(count) people"
+        }
+        return L10n.isZh ? "\(price) · \(who) · 每人 \(prefix)\(each)" : "\(price) · \(who) · \(prefix)\(each) each"
+    }
+
+    private func displayName(_ person: SplitPerson) -> String {
+        let trimmed = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? (L10n.isZh ? "未命名" : "Guest") : trimmed
     }
 }
 
-struct PersonBasketCard: View {
+struct PersonTotalCard: View {
     @ObservedObject var person: SplitPerson
     @ObservedObject var session: SplitSession
-    var isEditing: Bool
+    var isExpanded: Bool
     var themeColor: Color
-    var focusedField: FocusState<SplitBasketFocusField?>.Binding
-    var onToggleEdit: () -> Void
-    var onAddItem: (String, Double) -> Void
-    var onRemoveItem: (UUID) -> Void
-    var onDeletePerson: () -> Void
-    var onRecord: () -> Void
-    var canDeletePerson: Bool
     var canRecord: Bool
-    
-    @State private var newItemName = ""
-    @State private var newItemPrice: Double?
-    
-    var sharedPortion: Double {
-        session.sharedPortion(for: person.id)
-    }
-    
+    var onToggle: () -> Void
+    var onRecord: () -> Void
+
     var body: some View {
+        let shares = session.itemShares(for: person.id)
         VStack(spacing: 0) {
             // Header
-            Button(action: onToggleEdit) {
+            Button(action: onToggle) {
                 HStack(spacing: 12) {
-                    Text(String(person.name.prefix(1)).uppercased())
-                        .font(.caption).fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(themeColor.opacity(0.8))
-                        .clipShape(Circle())
-                    
+                    PersonAvatar(name: displayName, color: themeColor.opacity(0.85), size: 36)
+
                     VStack(alignment: .leading, spacing: 2) {
-                        if isEditing {
-                            TextField("Name", text: $person.name).font(.headline)
-                        } else {
-                            Text(person.name.isEmpty ? "Guest" : person.name)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(session.finalTotal(for: person).formatted(.currency(code: L10n.currencyCode)))
-                            .fontWeight(.bold)
+                        Text(displayName)
+                            .font(.headline)
                             .foregroundStyle(.primary)
-                        
-                        let count = person.items.count
-                        let share = sharedPortion
-                        if count > 0 || share > 0 {
-                            Text("\(count) items" + (share > 0 ? " + shared" : ""))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text(shares.isEmpty
+                             ? (L10n.isZh ? "暂无项目" : "No items yet")
+                             : (L10n.isZh ? "\(shares.count) 项" : "\(shares.count) \(shares.count == 1 ? "item" : "items")"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    
+
+                    Spacer()
+
+                    Text(session.finalTotal(for: person).formatted(.currency(code: L10n.currencyCode)))
+                        .font(.headline)
+                        .monospacedDigit()
+                        .foregroundStyle(.primary)
+                        .contentTransition(.numericText())
+
                     Image(systemName: "chevron.right")
                         .font(.caption).foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isEditing ? 90 : 0))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(16)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .contentShape(Rectangle())
             }
-            
+            .buttonStyle(.plain)
+            .accessibilityHint(L10n.isZh ? "显示明细" : "Shows this person’s items")
+
             // Expanded
-            if isEditing {
+            if isExpanded {
                 Divider()
                 VStack(spacing: 0) {
-                    // 1. Personal Items
-                    if person.items.isEmpty && sharedPortion == 0 {
-                        Text(L10n.isZh ? "暂无消费" : "No items")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .padding(.vertical, 12)
-                    } else {
-                        ForEach(person.items) { item in
-                            HStack {
-                                Text(item.name.isEmpty ? "Item" : item.name).font(.subheadline)
-                                Spacer()
-                                Text(item.price.formatted(.currency(code: L10n.currencyCode)))
-                                    .font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                                Button(action: { onRemoveItem(item.id) }) {
-                                    Image(systemName: "minus.circle.fill").foregroundStyle(.red.opacity(0.4))
+                    ForEach(shares) { share in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(share.name.isEmpty ? (L10n.isZh ? "项目" : "Item") : share.name)
+                                    .font(.subheadline)
+                                if share.isShared {
+                                    Text(L10n.isZh ? "\(share.peopleCount) 人分摊" : "Shared by \(share.peopleCount)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            Divider().padding(.leading, 16)
+                            Spacer()
+                            Text(share.share.amount.formatted(.currency(code: L10n.currencyCode)))
+                                .font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
                         }
-                        
-                        if sharedPortion > 0 {
-                            HStack {
-                                Text(L10n.isZh ? "共享分摊" : "Shared Portion")
-                                    .font(.subheadline).italic()
-                                    .foregroundStyle(themeColor)
-                                Spacer()
-                                Text(sharedPortion.formatted(.currency(code: L10n.currencyCode)))
-                                    .font(.subheadline).monospacedDigit().foregroundStyle(themeColor)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(themeColor.opacity(0.05))
-                            Divider()
-                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                     }
-                    
-                    // 2. Add Personal Item
-                    HStack(spacing: 12) {
-                        TextField(L10n.isZh ? "个人菜品" : "Personal Item", text: $newItemName)
-                            .font(.subheadline)
-                            .submitLabel(.next)
-                            .focused(focusedField, equals: .personName(person.id))
-                            .onSubmit { focusedField.wrappedValue = .personPrice(person.id) }
-                        
-                        HStack(spacing: 2) {
-                            Text(L10n.currencySymbol).font(.caption).foregroundStyle(.secondary)
-                            TextField("0", value: $newItemPrice, format: .number)
-                                .keyboardType(.decimalPad)
-                                .focused(focusedField, equals: .personPrice(person.id))
-                                .frame(width: 60)
-                        }
-                        .padding(6)
-                        .background(Color(uiColor: .systemBackground))
-                        .cornerRadius(6)
-                        
-                        Button(action: {
-                            if let price = newItemPrice,
-                               ExpenseInputValidator.isValidLineItemAmount(price) {
-                                onAddItem(newItemName, price)
-                                newItemName = ""
-                                newItemPrice = nil
-                                focusedField.wrappedValue = .personName(person.id)
-                            }
-                        }) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title2)
+
+                    let extras = session.taxAndTip(for: person)
+                    if extras > 0 {
+                        HStack {
+                            Text(TipPreset.extrasLabel(hasTip: session.hasTip))
+                                .font(.subheadline).italic()
                                 .foregroundStyle(themeColor)
+                            Spacer()
+                            Text(extras.formatted(.currency(code: L10n.currencyCode)))
+                                .font(.subheadline).monospacedDigit().foregroundStyle(themeColor)
                         }
-                        .disabled(newItemPrice.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? true)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                     }
-                    .padding(16)
-                    .background(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.3))
-                    
-                    Divider()
-                    
-                    // 3. Actions Row
+
+                    Divider().padding(.top, 4)
+
                     HStack {
-                        Button(action: onDeletePerson) {
-                            HStack {
-                                Image(systemName: "trash")
-                                Text(L10n.isZh ? "删除" : "Delete")
-                            }
-                            .font(.caption).foregroundStyle(.red)
-                            .padding(8)
-                            .background(Color.red.opacity(0.1)).clipShape(Capsule())
-                        }
-                        .disabled(!canDeletePerson)
-                        .opacity(canDeletePerson ? 1 : 0.4)
-                        
                         Spacer()
-                        
-                        Button(action: {
-                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                // Use freshest computed value at the moment of record button tap
-                                onRecord()
-                            }
-                        }) {
+                        Button(action: onRecord) {
                             HStack {
                                 Image(systemName: "square.and.pencil")
-                                Text(L10n.isZh ? "记录" : "Record")
+                                Text(L10n.isZh ? "记录为支出" : "Record as Expense")
                             }
-                            .font(.caption).fontWeight(.bold)
+                            .font(.subheadline).fontWeight(.bold)
                             .padding(.vertical, 8)
                             .padding(.horizontal, 16)
                             .background(themeColor.opacity(0.1))
                             .foregroundStyle(themeColor)
                             .clipShape(Capsule())
                         }
+                        .buttonStyle(.plain)
                         .disabled(!canRecord)
                         .opacity(canRecord ? 1 : 0.4)
                     }
@@ -603,47 +709,12 @@ struct PersonBasketCard: View {
                 }
             }
         }
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(uiColor: .secondarySystemGroupedBackground)).shadow(color: .black.opacity(0.05), radius: 5))
     }
-}
 
-// Shared tip-control design for both split modes. Equal tiles keep choices
-// immediately visible and prevent short labels from collapsing into circles.
-struct TipOptionButton: View {
-    let text: String
-    let isSelected: Bool
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.caption.weight(.bold))
-                        .accessibilityHidden(true)
-                }
-            }
-            .font(.subheadline.weight(.semibold))
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .foregroundStyle(isSelected ? Color.white : Color.primary)
-            .background(isSelected ? color : Color(uiColor: .tertiarySystemFill))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(isSelected ? color : Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityLabel(text)
-        .accessibilityValue(isSelected ? (L10n.isZh ? "已选择" : "Selected") : (L10n.isZh ? "未选择" : "Not selected"))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .animation(.snappy, value: isSelected)
+    private var displayName: String {
+        let trimmed = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? (L10n.isZh ? "未命名" : "Guest") : trimmed
     }
 }
