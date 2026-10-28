@@ -586,7 +586,7 @@ nonisolated struct QuickEntryCategoryReader {
         let response = try await session.respond(
             to: "Note: \(text)",
             generating: GeneratedQuickEntryCategory.self,
-            options: GenerationOptions(samplingMode: .greedy)
+            options: .mostLikely
         )
         let title = response.content.title.trimmingCharacters(in: .whitespacesAndNewlines)
         return QuickEntryRefinement(category: response.content.category,

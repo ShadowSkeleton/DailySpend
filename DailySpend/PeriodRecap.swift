@@ -196,10 +196,13 @@ nonisolated struct PeriodRecap: Equatable, Sendable {
     /// A category that moved the other way by more than the driver did, so
     /// the summary never seems to contradict the headline.
     var otherWayMover: (category: String, change: Money)? {
-        guard let change,
-              let mover = categories.map({ (category: $0.category, change: $0.total - $0.previous) })
-                .filter({ change.amount > .zero ? $0.change < .zero : $0.change > .zero })
-                .max(by: { abs($0.change.minorUnits) < abs($1.change.minorUnits) }),
+        guard let change else { return nil }
+        let wentUp = change.amount > .zero
+        let moves: [(category: String, change: Money)] = categories.map {
+            (category: $0.category, change: $0.total - $0.previous)
+        }
+        let otherWay = moves.filter { wentUp ? $0.change < .zero : $0.change > .zero }
+        guard let mover = otherWay.max(by: { abs($0.change.minorUnits) < abs($1.change.minorUnits) }),
               abs(mover.change.minorUnits) > abs(change.driverChange.minorUnits) else { return nil }
         return mover
     }
@@ -601,7 +604,7 @@ nonisolated struct RecapWriter {
         let session = LanguageModelSession(instructions: Self.instructions)
         let response = try await session.respond(
             to: "Facts:\n" + facts.map { "- " + $0 }.joined(separator: "\n"),
-            options: GenerationOptions(samplingMode: .greedy)
+            options: .mostLikely
         )
         // One paragraph, even if the model breaks lines.
         return response.content

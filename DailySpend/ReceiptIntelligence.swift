@@ -185,6 +185,19 @@ nonisolated struct ReceiptReader: ReceiptReading {
 
 #if canImport(FoundationModels)
 @available(iOS 26.0, *)
+extension GenerationOptions {
+    /// Always the most likely answer, so the same words read the same way.
+    /// Xcode 27 renamed the label; CI still builds with Xcode 26.
+    static var mostLikely: GenerationOptions {
+        #if compiler(>=6.4)
+        GenerationOptions(samplingMode: .greedy)
+        #else
+        GenerationOptions(sampling: .greedy)
+        #endif
+    }
+}
+
+@available(iOS 26.0, *)
 @Generable(description: "Values printed on one purchase receipt")
 nonisolated struct GeneratedReceipt {
     @Guide(description: "Store, restaurant, or business name as printed, without address or phone")
@@ -287,7 +300,7 @@ nonisolated struct ReceiptModelExtractor {
                 let response = try await session.respond(
                     to: (hint.map { "Note: \($0)\n\n" } ?? "") + "Receipt text:\n\(prompt.text)",
                     generating: GeneratedReceipt.self,
-                    options: GenerationOptions(samplingMode: .greedy)
+                    options: .mostLikely
                 )
                 return ReceiptDraft(response.content, truncated: prompt.truncated)
             } catch let error where Self.isContextOverflow(error) && budget > 1_200 {
@@ -297,10 +310,12 @@ nonisolated struct ReceiptModelExtractor {
     }
 
     private static func isContextOverflow(_ error: Error) -> Bool {
+        #if compiler(>=6.4)
         if #available(iOS 27.0, *), let error = error as? LanguageModelError,
            case .contextSizeExceeded = error {
             return true
         }
+        #endif
         if let error = error as? LanguageModelSession.GenerationError,
            case .exceededContextWindowSize = error {
             return true
