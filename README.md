@@ -8,7 +8,7 @@ DailySpend is a native SwiftUI expense tracker and bill-splitting app for iPhone
 
 ## Current status
 
-**Version 2.0 (16) — release candidate, not uploaded.** Version 2.0 adds on-device receipt reading, Quick Add, Siri and Control Center actions, and an Insights summary. Its [quality report](docs/releases/2.0-16-QUALITY.md) and [data-safety report](docs/releases/2.0-16-DATA_SAFETY.md) clear it for upload, TestFlight, and App Store release (device and iCloud checks reported passing by the owner on October 28, 2026). This is not an announcement of App Store availability. Confirm actual uploaded builds in App Store Connect.
+**Version 2.0 (16) — release candidate, not uploaded.** Version 2.0 adds on-device receipt reading, Quick Add, Siri and Control Center actions, and an Insights summary. Its [quality report](docs/releases/2.0-16-QUALITY.md) and [data-safety report](docs/releases/2.0-16-DATA_SAFETY.md) clear it for upload and a restricted TestFlight test. Broad release is held only until the owner's passing device checks (October 28, 2026) are tied to the uploaded build. This is not an announcement of App Store availability. Confirm actual uploaded builds in App Store Connect.
 
 Version 2.0 adds:
 
