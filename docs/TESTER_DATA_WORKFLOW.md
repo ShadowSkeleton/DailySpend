@@ -173,3 +173,129 @@ cross-device path.
 5. Tell testers when the public build is ready and guide them through the
    backed-up, in-place switch. Do not rely on TestFlight expiry as a migration
    plan.
+
+## Version 2.0 TestFlight cycle
+
+2.0 keeps the same app ID, widget ID, App Group, iCloud container, and
+database model as 1.0. A TestFlight build replaces the App Store app on that
+iPhone, and going back means installing the App Store version over it. Apple
+says only that the beta "will replace" the App Store app; it does not promise
+that data carries over. So every tester backs up first, even though the
+simulator over-install and roll-back checks in the 2.0 release report pass.
+
+Who this covers:
+
+- **App Store 1.0 users who join the 2.0 beta.** The beta replaces their App
+  Store app. They should back up before tapping Install.
+- **Existing TestFlight testers.** They update from the 1.0 beta in place.
+- **Testers with two devices.** If one stays on 1.0 and the other runs 2.0,
+  both read and write the same iCloud records. 2.0 adds no new kinds of
+  records, so 1.0 can show everything 2.0 saves. Long scanned notes may show
+  in full in 1.0's lists, because 1.0 doesn't shorten them to the first line.
+
+Inside the app, the first launch of 2.0 shows a one-time tour. People who
+used DailySpend before see a first page with their expense count and a
+**Back Up Now** button that saves the same encrypted backup as Settings.
+That reminder comes after the install, so the messages below still ask for
+a backup before installing.
+
+Before inviting testers:
+
+- [ ] Paste the 2.0 Beta App Description below in **TestFlight → Test
+      Information**.
+- [ ] Paste **What to Test** from `docs/TESTFLIGHT_NOTES.md` on the uploaded
+      build.
+- [ ] Owner first: back up, note counts and totals, install the TestFlight
+      build over the App Store app on a physical iPhone, and check them.
+      Then reinstall the App Store version over it and check again.
+- [ ] Send the tester message below to the existing email/chat group, and
+      repost it wherever the public TestFlight link was shared.
+
+### 2.0 Beta App Description
+
+> DailySpend is a free spending tracker and bill-splitting app. Version 2.0
+> adds receipt scanning, Quick Add in plain words, Siri and Control Center
+> actions, and a new Insights summary, all on your device.
+>
+> Protect your data first: before installing any beta or switching back to
+> the App Store version, open DailySpend → Settings → Data Management →
+> Create Encrypted Backup. Save the file outside the app, for example in
+> Files or iCloud Drive, and keep its passphrase separately. Never delete
+> DailySpend to change versions; install the new version over it.
+>
+> The beta replaces the App Store version on this iPhone. To go back, install
+> DailySpend from the App Store over the beta. Beta and App Store versions
+> share your iCloud data, so changes on one device reach your others. Send
+> feedback through TestFlight, and hide private details in screenshots.
+
+> DailySpend 是一款免费的记账与分账 App。2.0 版新增收据扫描、一句话快速记账、
+> Siri 和控制中心操作，以及全新的统计速览，全部在你的设备上完成。
+>
+> 请先保护好数据：安装任何测试版或切回 App Store 版本之前，请打开
+> DailySpend →“设置”→“数据管理”→“创建加密备份”。把文件保存到 App 之外
+> （例如“文件”App 或 iCloud 云盘），并另外记好密码。切换版本时请不要删除
+> DailySpend，直接在原 App 上安装新版本即可。
+>
+> 测试版会替换这台 iPhone 上的 App Store 版本。如需切回，从 App Store 重新
+> 安装 DailySpend 覆盖测试版即可。测试版和正式版共用你的 iCloud 数据，一台
+> 设备上的改动会同步到其他设备。欢迎通过 TestFlight 反馈，截图时请遮挡个人信息。
+
+### 2.0 tester message
+
+**Subject:** DailySpend 2.0 beta: please back up before you install
+
+> Hi everyone,
+>
+> DailySpend 2.0 is ready to test. It can scan receipts, split a bill from a
+> receipt, add expenses from a sentence like "Lunch with Alex 25", work with
+> Siri and Control Center, and show a quick summary of your month in
+> Insights. A short tour shows each of these the first time you open it.
+>
+> **Before you install, please back up:**
+>
+> 1. Open DailySpend → Settings → Data Management → Create Encrypted Backup.
+> 2. Choose a passphrase you'll remember (at least 12 characters) and save the
+>    file to Files or iCloud Drive, outside DailySpend.
+> 3. Check that the file is there, and note how many expenses you have.
+>
+> **Then:**
+>
+> - Install the beta from TestFlight **over** your current app. Don't delete
+>   DailySpend first; deleting it removes the copy on this iPhone.
+> - Open it and check that your expenses, budgets, and recurring entries look
+>   right. The first screen also offers a backup; it's fine to make another.
+> - If you use DailySpend on more than one device, they keep syncing through
+>   iCloud, even if one stays on the App Store version.
+>
+> **To go back** to the App Store version, install DailySpend from the App
+> Store over the beta. Your records stay. Please back up again before you do.
+>
+> If anything looks missing or wrong, stop using the beta and reply to me
+> before deleting the app or restoring a backup. Thank you for testing!
+
+> 大家好：
+>
+> DailySpend 2.0 测试版已经可以安装了。新版本可以扫描收据、用收据直接分账、
+> 用一句话记账（例如“和 Alex 吃午饭 25”）、配合 Siri 和控制中心使用，并在
+> “统计”页显示本月速览。第一次打开时会有简短的介绍带你看一遍。
+>
+> **安装之前，请先备份：**
+>
+> 1. 打开 DailySpend →“设置”→“数据管理”→“创建加密备份”。
+> 2. 设置一个你记得住的密码（至少 12 个字符），把文件保存到“文件”App 或
+>    iCloud 云盘，不要只留在 DailySpend 里。
+> 3. 确认文件已保存，并记下当前的账单数量。
+>
+> **然后：**
+>
+> - 在 TestFlight 里直接安装，**覆盖**现有 App。请不要先删除 DailySpend，
+>   删除会清掉这台 iPhone 上的数据。
+> - 打开后确认账单、预算和定期支出都正常。第一页也提供备份，可以再备份一次。
+> - 如果你在多台设备上使用 DailySpend，即使其中一台还是 App Store 版本，
+>   它们也会继续通过 iCloud 同步。
+>
+> **如需切回** App Store 版本，从 App Store 安装 DailySpend 覆盖测试版即可，
+> 记录会保留。切换前请再备份一次。
+>
+> 如果发现数据缺失或异常，请先停止使用测试版并联系我，不要删除 App 或恢复备份。
+> 感谢参与测试！

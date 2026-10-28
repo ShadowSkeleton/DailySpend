@@ -23,6 +23,7 @@ Observed October 2, 2026. This is a starting map, not proof of release behavior.
 - Widget extension ID: `com.jackson.LoveLedger.LoveLedgerWidget`.
 - Private CloudKit container: `iCloud.com.jackson.LoveLedger`.
 - App Group: `group.com.jackson.LoveLedger`.
+- Store file (observed October 28, 2026 on an iOS 27 simulator, 1.0 build 14 and 2.0 build 16): SwiftData's default store lives in the App Group container at `Library/Application Support/default.store` (with `-wal`/`-shm`), not in the app's data container. Snapshot that location; the app container holds only standard preferences.
 - The current explicit container schema includes `Expense` and `CategoryBudget`; no explicit `VersionedSchema` or `SchemaMigrationPlan` is present in the inspected startup path. Do not infer migration correctness from that absence or from comments calling a field additive.
 - The startup path tries a CloudKit configuration, then a local-only configuration, and can terminate with `fatalError` if both fail. Verify actual error handling and store URLs; do not assume the two configurations prove recovery.
 - `amountMinorUnits` is optional alongside legacy `amount: Double`. Readers prefer cents when present. Older writers changing only `amount` can make paired representations disagree; test mixed-version behavior before deciding how to resolve it.

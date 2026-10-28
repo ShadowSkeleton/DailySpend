@@ -29,10 +29,27 @@ final class ReceiptScanController {
 
     func start(_ source: ReceiptCaptureSource) {
         #if DEBUG
+        // UI tests can't drive the photo picker; this reads the next image
+        // file passed at launch with the real on-device reader.
+        if let page = ReceiptDraft.nextUITestReceiptFile() {
+            read([page])
+            return
+        }
         // UI tests and screenshots can't drive the camera; this feeds a fixed
         // synthetic receipt through the same review path instead.
         if ProcessInfo.processInfo.arguments.contains(ReceiptDraft.uiTestLaunchArgument) {
-            onDraft?(ReceiptDraft.uiTestSample)
+            guard ProcessInfo.processInfo.arguments.contains(ReceiptDraft.uiTestSlowArgument) else {
+                onDraft?(ReceiptDraft.uiTestSample)
+                return
+            }
+            // Holds the reading overlay on screen long enough to inspect it.
+            isReading = true
+            readingTask = Task {
+                try? await Task.sleep(for: .seconds(6))
+                guard !Task.isCancelled else { return }
+                isReading = false
+                onDraft?(ReceiptDraft.uiTestSample)
+            }
             return
         }
         #endif
@@ -190,29 +207,182 @@ private struct ReceiptReadingOverlay: View {
     let themeColor: Color
     let onCancel: () -> Void
 
+    @State private var appeared = false
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.12).ignoresSafeArea()
-            VStack(spacing: 12) {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(themeColor)
-                Text(L10n.isZh ? "正在读取收据…" : "Reading receipt…")
-                    .font(.headline)
+            VStack(spacing: 10) {
+                ReceiptReadingAnimation(themeColor: themeColor)
+                    .padding(.bottom, 2)
+                ReceiptReadingStatus()
                 Label(L10n.isZh ? "在此设备上处理" : "Processed on this device", systemImage: "lock.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(L10n.cancel, action: onCancel)
                     .font(.subheadline.weight(.semibold))
+                    .tint(themeColor)
                     .padding(.top, 4)
             }
             .padding(24)
-            .frame(minWidth: 220)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .frame(minWidth: 240)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
             .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
+            .scaleEffect(appeared ? 1 : 0.88)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(L10n.isZh ? "正在读取收据" : "Reading receipt")
         }
+        .onAppear {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.62)) { appeared = true }
+        }
+    }
+}
+
+/// Steps through what the reader is doing, so a few seconds of waiting
+/// feel like progress rather than a stall.
+private struct ReceiptReadingStatus: View {
+    @State private var start = Date()
+
+    private let steps = L10n.isZh
+        ? ["正在读取收据…", "正在识别项目…", "正在查找总额…", "正在核对金额…"]
+        : ["Reading receipt…", "Finding the items…", "Spotting the total…", "Checking the math…"]
+
+    var body: some View {
+        TimelineView(.periodic(from: start, by: 1.6)) { context in
+            let step = min(Int(context.date.timeIntervalSince(start) / 1.6), steps.count - 1)
+            Text(steps[step])
+                .font(.headline)
+                .id(step)
+                .frame(maxWidth: .infinity)
+                .transition(.push(from: .bottom))
+                .animation(.snappy, value: step)
+        }
+        .frame(height: 24)
+        .clipped()
+    }
+}
+
+/// A receipt floating on a soft halo while a beam sweeps down it. Lines
+/// light up in the theme color as they are read, and sparkles twinkle
+/// around it. Reduce Motion shows the same picture standing still.
+private struct ReceiptReadingAnimation: View {
+    let themeColor: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var start = Date()
+
+    private let paperSize = CGSize(width: 72, height: 94)
+    private let lineWidths: [CGFloat] = [0.5, 0.82, 0.64, 0.74, 0.56]
+
+    var body: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let time = reduceMotion ? 0.9 : context.date.timeIntervalSince(start)
+            // Down the receipt and back, easing at each end like a scanner.
+            let sweep = (1 - cos(time * 2.4)) / 2
+            ZStack {
+                Circle()
+                    .fill(themeColor.opacity(0.14))
+                    .frame(width: 118, height: 118)
+                    .scaleEffect(1 + 0.05 * sin(time * 2.4))
+                Circle()
+                    .stroke(themeColor.opacity(0.18), lineWidth: 1.5)
+                    .frame(width: 118, height: 118)
+                    .scaleEffect(1 + 0.18 * (time * 0.6).truncatingRemainder(dividingBy: 1))
+                    .opacity(reduceMotion ? 0 : 1 - (time * 0.6).truncatingRemainder(dividingBy: 1))
+
+                paper(sweep: sweep)
+                    .rotationEffect(.degrees(-4 + 3 * sin(time * 1.2)))
+                    .offset(y: -3 * sin(time * 2.4))
+
+                sparkle(size: 15, time: time, phase: 0).offset(x: 46, y: -40)
+                sparkle(size: 10, time: time, phase: 2.1).offset(x: -48, y: -22)
+                sparkle(size: 12, time: time, phase: 4.2).offset(x: 44, y: 38)
+            }
+            .frame(width: 140, height: 132)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func paper(sweep: Double) -> some View {
+        let rows = lineWidths.count + 1
+        return ZStack(alignment: .topLeading) {
+            ReceiptPaperShape()
+                .fill(.white)
+                .shadow(color: .black.opacity(0.14), radius: 6, y: 3)
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(lineWidths.indices, id: \.self) { index in
+                    line(width: lineWidths[index], height: 4, lit: lit(row: index, of: rows, sweep: sweep))
+                }
+                HStack {
+                    line(width: 0.3, height: 6, lit: lit(row: rows - 1, of: rows, sweep: sweep))
+                    Spacer(minLength: 0)
+                    line(width: 0.36, height: 6, lit: lit(row: rows - 1, of: rows, sweep: sweep))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 13)
+
+            LinearGradient(colors: [themeColor.opacity(0), themeColor.opacity(0.32)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(height: 22)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(themeColor)
+                        .frame(height: 2)
+                        .shadow(color: themeColor, radius: 4)
+                }
+                .offset(y: sweep * (paperSize.height - 12) - 12)
+        }
+        .frame(width: paperSize.width, height: paperSize.height)
+        .clipShape(ReceiptPaperShape())
+    }
+
+    /// How brightly a row glows: full once the beam has passed it.
+    private func lit(row: Int, of rows: Int, sweep: Double) -> Double {
+        let position = (Double(row) + 0.5) / Double(rows)
+        return min(max((sweep - position) * 6 + 0.5, 0), 1)
+    }
+
+    private func line(width: CGFloat, height: CGFloat, lit: Double) -> some View {
+        Capsule()
+            .fill(Color.black.opacity(0.12))
+            .overlay(Capsule().fill(themeColor).opacity(lit))
+            .frame(width: (paperSize.width - 24) * width, height: height)
+    }
+
+    private func sparkle(size: CGFloat, time: Double, phase: Double) -> some View {
+        let pulse = reduceMotion ? 0.8 : (sin(time * 3 + phase) + 1) / 2
+        return Image(systemName: "sparkle")
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(themeColor)
+            .scaleEffect(0.6 + 0.5 * pulse)
+            .rotationEffect(.degrees(pulse * 40))
+            .opacity(0.35 + 0.65 * pulse)
+    }
+}
+
+/// A paper slip with rounded top corners and a torn, zigzag bottom edge.
+private struct ReceiptPaperShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let radius: CGFloat = 8
+        let tooth: CGFloat = 5
+        let teeth = 7
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY - tooth))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + radius, y: rect.minY), control: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + radius), control: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - tooth))
+        let step = rect.width / CGFloat(teeth)
+        for index in stride(from: teeth, to: 0, by: -1) {
+            let x = rect.minX + CGFloat(index) * step
+            path.addLine(to: CGPoint(x: x - step / 2, y: rect.maxY))
+            path.addLine(to: CGPoint(x: x - step, y: rect.maxY - tooth))
+        }
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -229,23 +399,32 @@ struct ReceiptDraftBanner: View {
     let onDismiss: () -> Void
 
     var body: some View {
+        let warnings = self.warnings
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: draft.source == .appleIntelligence ? "sparkles" : "doc.text.viewfinder")
+            Image(systemName: statusSymbol(warnings: warnings))
                 .font(.title3)
-                .foregroundStyle(themeColor)
+                .foregroundStyle(statusColor(warnings: warnings))
                 .frame(width: 28)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.isZh ? "已从收据填写" : "Filled from receipt")
-                    .font(.subheadline.weight(.semibold))
-                if !summary.isEmpty {
-                    Text(summary)
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(statusTitle(warnings: warnings))
+                        .font(.subheadline.weight(.semibold))
+                    if !summary.isEmpty {
+                        Text(summary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if warnings.isEmpty && draft.isVerified {
+                    Text(L10n.isZh ? "小计、税和小费与收据上的总额一致。" : "Subtotal, tax, and tip add up to the total printed on the receipt.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(warnings, id: \.self) { message in
-                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                    Label(message, systemImage: "exclamationmark.circle.fill")
                         .font(.footnote)
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
@@ -256,9 +435,12 @@ struct ReceiptDraftBanner: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(L10n.isZh ? "保存前请核对。" : "Check the details before saving.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(disclaimer)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+                    .accessibilityIdentifier("receipt-ai-disclaimer")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Button(action: onDismiss) {
@@ -271,8 +453,46 @@ struct ReceiptDraftBanner: View {
         }
         .padding(16)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            if !warnings.isEmpty {
+                RoundedRectangle(cornerRadius: 16).strokeBorder(Color.orange.opacity(0.35), lineWidth: 1)
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("receipt-draft-banner")
+    }
+
+    // MARK: Status
+
+    /// Three plain states: checked and consistent, something to look at, or
+    /// filled in without a way to check it.
+    private func statusTitle(warnings: [String]) -> String {
+        if !warnings.isEmpty {
+            return L10n.isZh
+                ? "保存前请核对 \(warnings.count) 处"
+                : (warnings.count == 1 ? "Check 1 thing before saving" : "Check \(warnings.count) things before saving")
+        }
+        if draft.isVerified { return L10n.isZh ? "金额已核对" : "Amounts check out" }
+        return L10n.isZh ? "已从收据填写" : "Filled from receipt"
+    }
+
+    private func statusSymbol(warnings: [String]) -> String {
+        if !warnings.isEmpty { return "exclamationmark.triangle.fill" }
+        if draft.isVerified { return "checkmark.seal.fill" }
+        return draft.source == .appleIntelligence ? "sparkles" : "doc.text.viewfinder"
+    }
+
+    private func statusColor(warnings: [String]) -> Color {
+        if !warnings.isEmpty { return .orange }
+        if draft.isVerified { return .green }
+        return themeColor
+    }
+
+    private var disclaimer: String {
+        draft.source == .appleIntelligence
+            ? (L10n.isZh ? "由 Apple 智能在本机读取。AI 可能出错，请核对重要信息。"
+                         : "Read on this device by Apple Intelligence. AI can make mistakes, so check important details.")
+            : (L10n.isZh ? "在本机读取。保存前请核对金额。" : "Read on this device. Check the amount before saving.")
     }
 
     private var summary: String {
@@ -287,19 +507,27 @@ struct ReceiptDraftBanner: View {
 
     /// Values that need checking before saving.
     private var warnings: [String] {
-        draft.issues.compactMap(message(for:))
+        var messages: [String] = []
+        // An older receipt saves into its own month, out of view on Home.
+        if let date = draft.date, !Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month) {
+            let shown = date.formatted(.dateTime.year().month(.wide).day())
+            messages.append(L10n.isZh
+                ? "收据日期为 \(shown)，将记在那个月份。如需记在今天，请修改日期。"
+                : "Dated \(shown), so it will be saved in that month. Change the date to record it today.")
+        }
+        return messages + draft.issues.compactMap(message(for:))
     }
 
     /// What the scan did on the person's behalf; nothing here is a problem.
     private var notes: [String] {
         var messages: [String] = []
-        if context == .split, let discount = draft.discount, discount > .zero, !draft.items.isEmpty {
+        if context == .split, let discount = draft.discountSpreadAcrossItems {
             let amount = discount.amount.formatted(.currency(code: L10n.currencyCode))
             messages.append(L10n.isZh
                 ? "\(amount) 的折扣已按价格比例分摊到各项目。"
                 : "A \(amount) discount is spread across items by price.")
         }
-        if context == .split, draft.expectsNoTip {
+        if context == .split, draft.expectsNoTip, TipPreset.isCustomary {
             messages.append(L10n.isZh ? "这类消费通常不付小费，小费已设为“不加”。" : "Tip set to None: tips aren’t usual for this kind of purchase.")
         }
         if draft.source == .textRecognition {
@@ -310,31 +538,49 @@ struct ReceiptDraftBanner: View {
         return messages
     }
 
+    /// Each warning says what to check first, then why.
     private func message(for issue: ReceiptDraft.Issue) -> String? {
         func currency(_ money: Money) -> String { money.amount.formatted(.currency(code: L10n.currencyCode)) }
         switch issue {
         case .totalNotFound:
-            return L10n.isZh ? "没有找到总额，请输入金额。" : "No total was found. Enter the amount."
-        case .totalMismatch(let calculated, let printed):
+            return L10n.isZh ? "请输入总额：收据上没有找到。" : "Enter the total. It couldn’t be found on the receipt."
+        case .totalNotPrinted(let total):
             return L10n.isZh
-                ? "小计、税和小费合计 \(currency(calculated))，但收据总额为 \(currency(printed))。"
-                : "Subtotal, tax, and tip add up to \(currency(calculated)), but the receipt total is \(currency(printed))."
+                ? "请核对总额：读到的 \(currency(total)) 在收据上没有出现，可能读错了。"
+                : "Check the total. \(currency(total)) doesn’t appear anywhere on the receipt, so it may be misread."
+        case .totalMismatch(let calculated, let printed):
+            // Show the sum itself, so it's clear which number looks wrong.
+            var parts: [String] = []
+            if let subtotal = draft.subtotal {
+                parts.append((L10n.isZh ? "小计 " : "subtotal ") + currency(subtotal))
+            }
+            if draft.isDiscountAfterSubtotal, let discount = draft.discount {
+                parts.append((L10n.isZh ? "− 折扣 " : "− discount ") + currency(discount))
+            }
+            if let tax = draft.tax { parts.append((L10n.isZh ? "+ 税 " : "+ tax ") + currency(tax)) }
+            if let tip = draft.tip { parts.append((L10n.isZh ? "+ 小费 " : "+ tip ") + currency(tip)) }
+            let sum = parts.joined(separator: " ")
+            return L10n.isZh
+                ? "请核对总额：\(sum) = \(currency(calculated))，但总额读到的是 \(currency(printed))。"
+                : "Check the total. The receipt’s parts add up to \(currency(calculated)) (\(sum)), but the total reads \(currency(printed))."
         case .itemsAdjusted(let adjustment):
             guard context == .split else { return nil }
             if adjustment > .zero {
                 return L10n.isZh
-                    ? "有 \(currency(adjustment)) 未能对应到项目，已列为“\(ReceiptDraft.otherItemsName)”。"
-                    : "\(currency(adjustment)) didn’t match any item and is listed as \(ReceiptDraft.otherItemsName)."
+                    ? "可能漏读了项目：小计中有 \(currency(adjustment)) 没对应到项目，已列为“\(ReceiptDraft.otherItemsName)”。"
+                    : "Some items may be missing. \(currency(adjustment)) of the subtotal didn’t match an item, so it’s listed as \(ReceiptDraft.otherItemsName)."
             }
+            let excess = Money(minorUnits: -adjustment.minorUnits)
+            let subtotal = draft.itemsTotal + adjustment
             return L10n.isZh
-                ? "项目合计比小计多 \(currency(Money(minorUnits: -adjustment.minorUnits)))，已按比例调整。"
-                : "Items added up to \(currency(Money(minorUnits: -adjustment.minorUnits))) more than the subtotal, so prices were adjusted proportionally."
+                ? "请核对项目：项目合计 \(currency(draft.itemsTotal))，比小计 \(currency(subtotal)) 多 \(currency(excess))，价格已按比例调低。"
+                : "Check the items. They add up to \(currency(draft.itemsTotal)), \(currency(excess)) more than the \(currency(subtotal)) subtotal, so prices were lowered to match."
         case .differentCurrency(let code):
             return L10n.isZh
-                ? "这张收据可能使用 \(code)。金额会按原数字记录，不做换算。"
-                : "This receipt may be in \(code). Amounts are recorded as printed, without conversion."
+                ? "这张收据可能使用 \(code)。金额按原数字记录，不做换算。"
+                : "This receipt looks like it’s in \(code). Amounts are recorded as printed, not converted."
         case .textTruncated:
-            return L10n.isZh ? "收据很长，可能有部分项目未读取。" : "This receipt is long; some items may be missing."
+            return L10n.isZh ? "收据很长，末尾的项目可能没有读到。" : "This receipt is long, so items near the end may be missing."
         }
     }
 }
@@ -358,6 +604,20 @@ extension CGImagePropertyOrientation {
 #if DEBUG
 extension ReceiptDraft {
     static let uiTestLaunchArgument = "-ui-test-receipt"
+    static let uiTestSlowArgument = "-ui-test-receipt-slow"
+    /// Followed by comma-separated image paths, read one per scan.
+    static let uiTestFilesArgument = "-ui-test-receipt-files"
+    @MainActor private static var uiTestFilesRead = 0
+
+    @MainActor static func nextUITestReceiptFile() -> ReceiptPage? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: uiTestFilesArgument), index + 1 < arguments.count else { return nil }
+        let paths = arguments[index + 1].split(separator: ",").map(String.init)
+        guard uiTestFilesRead < paths.count,
+              let image = UIImage(contentsOfFile: paths[uiTestFilesRead])?.cgImage else { return nil }
+        uiTestFilesRead += 1
+        return ReceiptPage(image: image, orientation: .up)
+    }
 
     /// A fictional restaurant receipt for UI tests and screenshots.
     static var uiTestSample: ReceiptDraft {
@@ -373,6 +633,7 @@ extension ReceiptDraft {
             tax: Money(minorUnits: 351),
             total: Money(minorUnits: 4251),
             category: "Food",
+            isTippedService: true,
             source: .appleIntelligence
         )
     }

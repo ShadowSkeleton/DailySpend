@@ -37,11 +37,14 @@ struct ExpenseRowCard: View {
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
-                if !expense.displayNote.isEmpty {
-                    Text(expense.displayNote)
+                // One line keeps every row the same compact height; the full
+                // note opens with the expense.
+                if !expense.notePreview.isEmpty {
+                    Text(expense.notePreview)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

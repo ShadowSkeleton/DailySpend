@@ -94,6 +94,17 @@ struct ReceiptData: Equatable {
     var tip: Double
     var total: Double
     var footer: String
+    /// The receipt's date, when it came from a scan.
+    var date: Date? = nil
+    /// The headline figure, such as what each person pays in a quick split.
+    var highlight: ReceiptHighlight? = nil
+}
+
+/// The large number at the top of a shared receipt.
+struct ReceiptHighlight: Equatable {
+    var label: String
+    var amount: Double
+    var caption: String?
 }
 
 /// One line on the bill. An item with one person is theirs alone; with
@@ -110,13 +121,71 @@ nonisolated enum TipPreset {
     static let none = 0
     static let customPercentage = -1
     static let fixedAmount = -2
+    /// A scanned restaurant bill that leaves the tip line for the payer:
+    /// nothing is added until they choose, and nothing is guessed for them.
+    static let undecided = -3
     static let percentages = [10, 15, 18, 20]
 
-    /// Tipping is customary in the United States and Canada. Elsewhere a
-    /// default tip would add money nobody intended to pay.
-    static var defaultSelection: Int {
-        ["US", "CA"].contains(Locale.current.region?.identifier ?? "") ? 15 : none
+    /// Tipping is customary in the United States and Canada. Elsewhere the tip
+    /// control starts folded away and a default tip would add money nobody
+    /// intended to pay. This follows the phone's region, not its language.
+    static var isCustomary: Bool { isCustomary(in: Locale.current) }
+
+    static func isCustomary(in locale: Locale) -> Bool {
+        ["US", "CA"].contains(locale.region?.identifier ?? "")
     }
+
+    static var defaultSelection: Int { isCustomary ? 15 : none }
+
+    /// The tip to start from after a scan, or nil to keep the current choice.
+    /// A charged tip is handled separately as a fixed amount.
+    static func selection(after draft: ReceiptDraft, tippingIsCustomary: Bool = isCustomary) -> Int? {
+        if draft.expectsNoTip { return none }
+        if draft.leavesTipToPayer { return tippingIsCustomary ? undecided : none }
+        return nil
+    }
+
+    /// "Tax & tip" only when there is a tip, so places without tipping read "Tax".
+    static func extrasLabel(hasTip: Bool) -> String {
+        hasTip ? (L10n.isZh ? "税费与小费" : "Tax & tip") : (L10n.isZh ? "税费" : "Tax")
+    }
+}
+
+/// Figures a percentage tip the way the restaurant does, so the split
+/// matches the card slip. When the receipt prints a tip guide, its own
+/// choices and amounts are used as is. Other percentages are figured on the
+/// base the guide uses, or on the bill before tax, as is customary.
+nonisolated struct TipCalculator: Equatable {
+    var beforeTax: Money
+    var afterTax: Money
+    var suggestions: [SuggestedTip] = []
+    var receiptBasis: TipBasis? = nil
+
+    var basis: TipBasis { receiptBasis ?? .beforeTax }
+    var base: Money { basis == .beforeTax ? beforeTax : afterTax }
+    var hasSeparateTax: Bool { afterTax != beforeTax }
+
+    /// The percentages to offer: the receipt's tip guide, or the usual ones.
+    var percentages: [Int] {
+        suggestions.isEmpty ? TipPreset.percentages : suggestions.map(\.percent)
+    }
+
+    func printedTip(percent: Int) -> Money? {
+        suggestions.first { $0.percent == percent }?.amount
+    }
+
+    func tip(percent: Int) -> Money {
+        guard percent >= 0 else { return .zero }
+        return printedTip(percent: percent) ?? base.applying(percent: percent)
+    }
+}
+
+/// A scanned receipt's tip table, kept while the bill it describes is unchanged.
+nonisolated struct ScannedTipGuide: Equatable {
+    var beforeTax: Money
+    var tax: Money
+    var suggestions: [SuggestedTip]
+    var basis: TipBasis?
 }
 
 // These are UI-facing state containers, but their values and calculation
@@ -144,6 +213,9 @@ nonisolated class SplitSession: ObservableObject {
     
     @Published var tipSelection: Int = TipPreset.defaultSelection
     @Published var customTipPercentage: Int?
+    var scannedTipGuide: ScannedTipGuide?
+    /// The scanned receipt's date, shown on the shared receipt.
+    var date: Date?
     @Published var customFixedTip: Double?
 
     /// The store name from a scanned receipt, used in notes and the export.
@@ -261,10 +333,16 @@ nonisolated class SplitSession: ObservableObject {
                 ? tip : money(customFixedTip ?? 0) + tip
             tipSelection = TipPreset.fixedAmount
             customFixedTip = combined.amount
-        } else if replacingItems && draft.expectsNoTip {
-            tipSelection = TipPreset.none
+        } else if replacingItems, let selection = TipPreset.selection(after: draft) {
+            tipSelection = selection
         }
         if replacingItems || merchant == nil { merchant = draft.merchant }
+        if replacingItems || date == nil { date = draft.date }
+        // Two receipts combined no longer match either printed tip table.
+        scannedTipGuide = replacingItems
+            ? ScannedTipGuide(beforeTax: sessionSubtotalMoney, tax: totalTaxMoney,
+                              suggestions: draft.suggestedTips, basis: draft.suggestedTipBasis)
+            : nil
         objectWillChange.send()
     }
     
@@ -352,14 +430,29 @@ nonisolated class SplitSession: ObservableObject {
         if tipSelection == TipPreset.fixedAmount {
             return money(customFixedTip ?? 0)
         }
+        if tipSelection == TipPreset.undecided { return .zero }
 
         let percentage = tipSelection == TipPreset.customPercentage ? (customTipPercentage ?? 0) : tipSelection
-        return sessionSubtotalMoney.applying(percent: percentage)
+        return tipCalculator.tip(percent: percentage)
+    }
+
+    var tipCalculator: TipCalculator {
+        var calculator = TipCalculator(beforeTax: sessionSubtotalMoney,
+                                       afterTax: sessionSubtotalMoney + totalTaxMoney)
+        if let guide = scannedTipGuide {
+            calculator.receiptBasis = guide.basis
+            if guide.beforeTax == sessionSubtotalMoney && guide.tax == totalTaxMoney {
+                calculator.suggestions = guide.suggestions
+            }
+        }
+        return calculator
     }
 
     var totalTipAmount: Double {
         totalTipMoney.amount
     }
+
+    var hasTip: Bool { totalTipMoney > .zero }
 
     private var sharedCostsMoney: Money {
         totalTaxMoney + totalTipMoney
@@ -407,6 +500,8 @@ nonisolated class SplitSession: ObservableObject {
         taxAmount = nil
         tipSelection = TipPreset.defaultSelection
         customTipPercentage = nil
+        scannedTipGuide = nil
+        date = nil
         customFixedTip = nil
         merchant = nil
     }
@@ -442,14 +537,18 @@ extension SplitSession {
             let final = Money(finalTotal(for: person))
             let extras = final - Money(subtotal(for: person))
             if extras > .zero {
-                rows.append(.currency(L10n.isZh ? "税费与小费" : "Tax & tip", extras.amount))
+                rows.append(.currency(TipPreset.extrasLabel(hasTip: totalTipMoney > .zero), extras.amount))
             }
             rows.append(ReceiptItem(label: L10n.isZh ? "个人总计" : "Person total",
                                     value: .currency(final.amount), style: .personTotal))
         }
         let title = merchant.flatMap { $0.isEmpty ? nil : $0 } ?? (L10n.isZh ? "按人分配" : "Split by Person")
+        let caption = L10n.isZh
+            ? "\(people.count) 人 · \(items.count) 项"
+            : "\(people.count) \(people.count == 1 ? "person" : "people") · \(items.count) \(items.count == 1 ? "item" : "items")"
         return ReceiptData(title: title, items: rows,
                            subtotal: sessionSubtotal, tax: totalTaxAmount, tip: totalTipAmount,
-                           total: grandTotal, footer: "Generated by DailySpend")
+                           total: grandTotal, footer: "Generated by DailySpend", date: date,
+                           highlight: ReceiptHighlight(label: L10n.isZh ? "总计" : "Total", amount: grandTotal, caption: caption))
     }
 }

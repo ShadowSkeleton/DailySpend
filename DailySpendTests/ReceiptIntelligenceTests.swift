@@ -1,4 +1,5 @@
 import FoundationModels
+import ImageIO
 import UIKit
 import XCTest
 @testable import DailySpend
@@ -151,14 +152,17 @@ final class ReceiptIntelligenceTests: XCTestCase {
         XCTAssertEqual(session.tipSelection, TipPreset.none)
         XCTAssertEqual(Money(session.grandTotal), cents(1030), "The split matches what was paid")
 
-        // A restaurant receipt keeps the person's tip choice for them to decide.
+        // A restaurant bill with a blank tip line leaves the tip for the payer
+        // to choose where tipping is customary, and adds nothing meanwhile.
         let restaurant = ReceiptDraft(items: [.init(name: "Noodles", quantity: 1, price: cents(1650))],
                                       subtotal: cents(1650), total: cents(1650),
                                       category: "Food", isTippedService: true, source: .appleIntelligence)
         XCTAssertFalse(restaurant.expectsNoTip)
         session.tipSelection = 18
         session.apply(restaurant, replacingItems: true)
-        XCTAssertEqual(session.tipSelection, 18)
+        XCTAssertEqual(session.tipSelection, TipPreset.isCustomary ? TipPreset.undecided : TipPreset.none)
+        XCTAssertEqual(Money(session.grandTotal), cents(1650))
+        XCTAssertFalse(session.hasTip)
 
         // Total-only reads don't know the kind of store, so nothing changes.
         XCTAssertFalse(ReceiptDraft(total: cents(1000), source: .textRecognition).expectsNoTip)
@@ -181,8 +185,11 @@ final class ReceiptIntelligenceTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_790_000_000)
         let future = ReceiptDraft(date: now.addingTimeInterval(7 * 86_400), source: .appleIntelligence).reconciled(now: now)
         XCTAssertNil(future.date)
-        let ancient = ReceiptDraft(date: now.addingTimeInterval(-5 * 365 * 86_400), source: .appleIntelligence).reconciled(now: now)
+        let ancient = ReceiptDraft(date: now.addingTimeInterval(-12 * 365 * 86_400), source: .appleIntelligence).reconciled(now: now)
         XCTAssertNil(ancient.date)
+        let lastYear = now.addingTimeInterval(-500 * 86_400)
+        XCTAssertEqual(ReceiptDraft(date: lastYear, source: .appleIntelligence).reconciled(now: now).date, lastYear,
+                       "An older receipt keeps its own date")
         let yesterday = now.addingTimeInterval(-86_400)
         XCTAssertEqual(ReceiptDraft(date: yesterday, source: .appleIntelligence).reconciled(now: now).date, yesterday)
     }
@@ -304,7 +311,7 @@ final class ReceiptIntelligenceTests: XCTestCase {
         XCTAssertEqual(unrelated.items.map(\.price), [cents(300)])
     }
 
-    func testMislabeledFeesStillRecordTheTotalAndAreFlagged() {
+    func testMislabeledFeesBecomeTaxAndFeesThatAddUp() {
         let draft = ReceiptDraft(
             merchant: "Uber",
             items: [.init(name: "Trip fare", quantity: 1, price: cents(1840))],
@@ -312,11 +319,390 @@ final class ReceiptIntelligenceTests: XCTestCase {
             category: "Transport", source: .appleIntelligence
         ).reconciled()
         XCTAssertEqual(draft.amountToRecord, cents(2318))
-        XCTAssertEqual(draft.category, "Transport")
-        XCTAssertTrue(draft.issues.contains(.totalMismatch(calculated: cents(2226), printed: cents(2318))))
-        // A split still adds up to what was paid.
+        XCTAssertNil(draft.discount, "A fee misread as a discount doesn't explain any amount")
+        XCTAssertEqual(draft.tax, cents(285), "The booking fee is what remains after fare and tip")
+        XCTAssertEqual(draft.tip, cents(193))
+        XCTAssertTrue(draft.issues.isEmpty)
         let splitTotal = draft.itemsForSplit().reduce(Money.zero) { $0 + $1.price } + (draft.taxForSplit ?? .zero) + (draft.tip ?? .zero)
         XCTAssertEqual(splitTotal, cents(2318))
+    }
+
+    func testTaxCopiedFromTheTipIsReplacedByTheRemainder() {
+        // Recognition dropped "Sales Tax 4.26", and the model reused the tip.
+        let draft = ReceiptDraft(
+            merchant: "Osteria Lume",
+            items: [.init(name: "Margherita Pizza", quantity: 1, price: cents(1600)),
+                    .init(name: "Rigatoni Vodka", quantity: 1, price: cents(1900)),
+                    .init(name: "Caesar Salad", quantity: 1, price: cents(1300))],
+            subtotal: cents(4800), tax: cents(900), tip: cents(900), total: cents(6126),
+            category: "Food", isTippedService: true, source: .appleIntelligence
+        ).reconciled()
+        XCTAssertEqual(draft.tax, cents(426))
+        XCTAssertEqual(draft.tip, cents(900))
+        XCTAssertTrue(draft.issues.isEmpty)
+
+        // An implausibly large remainder is left for the person to check.
+        let suspicious = ReceiptDraft(subtotal: cents(1000), tax: cents(80), total: cents(5000),
+                                      source: .appleIntelligence).reconciled()
+        XCTAssertEqual(suspicious.tax, cents(80))
+        XCTAssertEqual(suspicious.issues, [.totalMismatch(calculated: cents(1080), printed: cents(5000))])
+    }
+
+    func testDiscountBelowTheSubtotalIsSpreadSoTheSplitMatchesWhatWasPaid() {
+        let draft = ReceiptDraft(
+            merchant: "惠民超市", currencyCode: "CNY",
+            items: [.init(name: "鸡蛋 10枚", quantity: 10, price: cents(1280)),
+                    .init(name: "大米 5kg", quantity: 5, price: cents(3990)),
+                    .init(name: "酱油", quantity: 1, price: cents(950)),
+                    .init(name: "苹果", quantity: 1, price: cents(1495)),
+                    .init(name: "牛奶", quantity: 2, price: cents(1100))],
+            subtotal: cents(8815), discount: cents(-500), total: cents(8315),
+            category: "Grocery", isTippedService: false, source: .appleIntelligence
+        ).reconciled()
+        XCTAssertEqual(draft.items.map(\.quantity), [1, 1, 1, 1, 2], "Pack sizes and weights aren't quantities")
+        XCTAssertTrue(draft.isDiscountAfterSubtotal)
+        XCTAssertEqual(draft.discountSpreadAcrossItems, cents(500))
+        let split = draft.itemsForSplit()
+        XCTAssertEqual(split.count, 6, "Only the two cartons of milk become separate lines")
+        XCTAssertEqual(split.reduce(Money.zero) { $0 + $1.price } + (draft.taxForSplit ?? .zero), cents(8315))
+        XCTAssertFalse(draft.issues.contains { if case .itemsAdjusted = $0 { return true } else { return false } })
+    }
+
+    func testPackSizesMovedIntoTheQuantityGoBackIntoTheName() {
+        let rows = ["惠民超市", "鸡蛋 10枚 | 12.80", "大米 5kg | 39.90", "牛奶 | 2 | 11.00", "PAIN RELIEF 24CT | 9.49"]
+        let draft = ReceiptDraft(items: [.init(name: "鸡蛋", quantity: 10, price: cents(1280)),
+                                         .init(name: "大米", quantity: 5, price: cents(3990)),
+                                         .init(name: "牛奶", quantity: 2, price: cents(1100)),
+                                         .init(name: "Pain Relief", quantity: 24, price: cents(949))],
+                                 source: .appleIntelligence).correctingPackSizes(using: rows)
+        XCTAssertEqual(draft.items.map(\.name), ["鸡蛋 10枚", "大米 5kg", "牛奶", "Pain Relief 24CT"])
+        XCTAssertEqual(draft.items.map(\.quantity), [1, 1, 2, 1])
+        XCTAssertNil(ReceiptDraft.packSize(2, in: "牛奶 | 2 | 11.00"), "A plain count is a real quantity")
+        XCTAssertNil(ReceiptDraft.packSize(5, in: "15kg bag"), "Digits are matched whole")
+        XCTAssertEqual(ReceiptDraft.packSize(6, in: "1 | Pork Soup Dumplings (6) | 10.95"), "(6)")
+        XCTAssertNil(ReceiptDraft.packSize(2, in: "2 | Brooklyn Lager (Pint) | 16.00"))
+    }
+
+    func testScannedTipStartsFromWhatTheReceiptSays() {
+        let restaurant = ReceiptDraft(total: cents(4251), isTippedService: true, source: .appleIntelligence)
+        let pharmacy = ReceiptDraft(total: cents(2935), isTippedService: false, source: .appleIntelligence)
+        let charged = ReceiptDraft(tip: cents(900), total: cents(6126), isTippedService: true, source: .appleIntelligence)
+        let unknown = ReceiptDraft(total: cents(1000), source: .textRecognition)
+
+        // A bill that leaves the tip line blank waits for the payer, but only
+        // where tipping is customary; elsewhere it stays at None.
+        XCTAssertEqual(TipPreset.selection(after: restaurant, tippingIsCustomary: true), TipPreset.undecided)
+        XCTAssertEqual(TipPreset.selection(after: restaurant, tippingIsCustomary: false), TipPreset.none)
+        XCTAssertEqual(TipPreset.selection(after: pharmacy, tippingIsCustomary: true), TipPreset.none)
+        XCTAssertNil(TipPreset.selection(after: charged, tippingIsCustomary: true))
+        XCTAssertNil(TipPreset.selection(after: unknown, tippingIsCustomary: true))
+    }
+
+    /// Receipt 16 as a camera might capture it: smaller, blurred, tilted, or
+    /// heavily compressed. Its tip guide must never become the tip or total.
+    func testTipGuideReceiptSurvivesPoorPhotos() async throws {
+        #if canImport(FoundationModels)
+        guard #available(iOS 26.0, *), ReceiptIntelligenceStatus.current == .ready else { throw XCTSkip("no model") }
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("docs/test-receipts/16-restaurant-tip-after-tax.jpg")
+        let source = try XCTUnwrap(CIImage(contentsOf: url))
+        let context = CIContext()
+        func jpeg(_ image: CIImage, quality: CGFloat) -> CGImage? {
+            guard let data = context.jpegRepresentation(of: image, colorSpace: CGColorSpaceCreateDeviceRGB(),
+                                                         options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: quality]),
+                  let reloaded = CIImage(data: data) else { return nil }
+            return context.createCGImage(reloaded, from: reloaded.extent)
+        }
+        let variants: [(String, CIImage, CGFloat)] = [
+            ("original", source, 0.9),
+            ("half", source.transformed(by: .init(scaleX: 0.5, y: 0.5)), 0.7),
+            ("third-blur", source.transformed(by: .init(scaleX: 0.35, y: 0.35)).applyingGaussianBlur(sigma: 0.8), 0.5),
+            ("rotated", source.transformed(by: .init(rotationAngle: 0.08)), 0.7),
+            ("rotated-neg", source.transformed(by: .init(rotationAngle: -0.06)).transformed(by: .init(scaleX: 0.6, y: 0.6)), 0.6),
+            ("low-quality", source.transformed(by: .init(scaleX: 0.4, y: 0.4)), 0.2),
+        ]
+        for (name, image, quality) in variants {
+            guard let cg = jpeg(image, quality: quality) else { continue }
+            let lines = try await ReceiptReader.recognizeText(in: [ReceiptPage(image: cg, orientation: .up)])
+            let rows = lines.flatMap(ReceiptTextLayout.rows(from:))
+            let final: ReceiptDraft
+            do {
+                final = try await ReceiptModelExtractor().extract(rows: rows)
+            } catch {
+                throw XCTSkip("The on-device model couldn't run here: \(error)")
+            }
+            XCTAssertEqual(final.total, cents(4410), name)
+            XCTAssertEqual(final.subtotal, cents(4000), name)
+            XCTAssertNil(final.tip, name)
+            XCTAssertEqual(final.issues, [], name)
+            XCTAssertEqual(final.suggestedTipBasis, .afterTax, "\(name): \(final.suggestedTips) from \(rows)")
+        }
+        #endif
+    }
+
+    private let tipGuideRows = [
+        "SAFFRON TABLE", "1520 Mission St, San Francisco CA", "10/24/2026 | 8:05 PM", "Server: Priya | Table 4",
+        "Chicken Tikka Masala | 21.50", "Garlic Naan | 6.50", "Mango Lassi | 12.00",
+        "Subtotal | 40.00", "Tax 10.25% | 4.10", "Total | 44.10", "TIP GUIDE (on total)",
+        "15%  Tip $6.62 | Total $50.72", "18%  Tip $7.94 | Total $52.04", "20%  Tip $8.82 | Total $52.92",
+        "Tip: ________", "Total: ________", "Thank you!"]
+
+    func testTipGuideTotalsAreNeverTheReceiptTotal() {
+        // What an iPhone read from receipt 16: the 18% row's total, two of the
+        // three dishes, and a subtotal it added up itself.
+        let phone = ReceiptDraft(
+            items: [.init(name: "Chicken Tikka Masala", quantity: 1, price: cents(2150)),
+                    .init(name: "Garlic Naan", quantity: 1, price: cents(650))],
+            subtotal: cents(2800), total: cents(5204), category: "Food", isTippedService: true,
+            source: .appleIntelligence
+        ).grounded(in: tipGuideRows).reconciled()
+        XCTAssertEqual(phone.total, cents(4410))
+        XCTAssertEqual(phone.subtotal, cents(4000))
+        XCTAssertEqual(phone.tax, cents(410))
+        XCTAssertNil(phone.tip)
+        XCTAssertEqual(phone.items.map(\.name), ["Chicken Tikka Masala", "Garlic Naan", "Mango Lassi"])
+        XCTAssertEqual(phone.issues, [])
+        XCTAssertEqual(phone.suggestedTipBasis, .afterTax)
+    }
+
+    func testTipGuideTipsAreNeverCharged() {
+        // A second iPhone reading: the 15% suggestion as a charged tip, and a
+        // subtotal and total that aren't printed anywhere.
+        let phone = ReceiptDraft(
+            items: [.init(name: "Chicken Tikka Masala", quantity: 1, price: cents(2150)),
+                    .init(name: "Garlic Naan", quantity: 1, price: cents(650))],
+            subtotal: cents(2800), tax: cents(410), tip: cents(662), total: cents(3412),
+            category: "Food", isTippedService: true, source: .appleIntelligence
+        ).grounded(in: tipGuideRows).reconciled()
+        XCTAssertNil(phone.tip)
+        XCTAssertEqual(phone.billBeforeTip, cents(4410))
+        XCTAssertEqual(phone.itemsForSplit().reduce(Money.zero) { $0 + $1.price }, cents(4000))
+        XCTAssertEqual(phone.issues, [])
+
+        XCTAssertEqual(ReceiptDraft.tipTableRows(in: tipGuideRows), [10, 11, 12, 13])
+        // Without a heading, rows listing tip choices are still a table, but a
+        // charged gratuity is not.
+        XCTAssertEqual(ReceiptDraft.tipTableRows(in: ["18% $7.02 | 20% $7.80", "15% Tip 6.62 Total 50.72",
+                                                      "Gratuity 18% | 13.32", "Tax 8% | 3.12"]), [0, 1])
+    }
+
+    func testMissedItemsAreRecoveredOnlyWhenTheyCompleteTheSubtotal() {
+        let partial = ReceiptDraft(items: [.init(name: "Garlic Naan", quantity: 1, price: cents(650))],
+                                   subtotal: cents(4000), source: .appleIntelligence)
+        // Two unclaimed rows make up exactly the missing $33.50.
+        XCTAssertEqual(partial.grounded(in: tipGuideRows).items.count, 3)
+        // When they don't, nothing is guessed; the split shows "Other items".
+        let rows = ["Garlic Naan | 6.50", "Mango Lassi | 12.00", "Subtotal | 40.00"]
+        XCTAssertEqual(partial.grounded(in: rows).items.map(\.name), ["Garlic Naan"])
+    }
+
+    func testReadingsThatCheckThemselvesAreVerified() {
+        let rows = ["Noodles | 16.50", "Subtotal | 39.00", "Tax | 3.51", "Total | 42.51"]
+        let consistent = ReceiptDraft(subtotal: cents(3900), tax: cents(351), total: cents(4251), source: .appleIntelligence)
+            .grounded(in: rows).reconciled()
+        XCTAssertTrue(consistent.isVerified)
+        XCTAssertEqual(consistent.issueSeverity, 0)
+
+        // A total that isn't printed anywhere, with nothing printed to replace it.
+        let invented = ReceiptDraft(total: cents(3412), source: .appleIntelligence)
+            .groundingAmounts(in: ["Noodles | 16.50", "Thank you"])
+        XCTAssertEqual(invented.issues, [.totalNotPrinted(cents(3412))])
+        XCTAssertFalse(invented.isVerified)
+        XCTAssertGreaterThanOrEqual(invented.issueSeverity, 2, "A second, careful read is tried")
+        if #available(iOS 26.0, *) {
+            XCTAssertTrue(ReceiptModelExtractor.hint(for: invented).contains("not printed"))
+        }
+
+        // A total-only read can't check itself, so it's never called verified.
+        XCTAssertFalse(ReceiptDraft(total: cents(4251), source: .textRecognition).isVerified)
+    }
+
+    func testSuggestedTipTablesAreRead() {
+        let printed = ReceiptDraft.suggestedTips(in: [
+            "Subtotal | $39.00", "Tax | $3.51", "Total | $42.51",
+            "Suggested Tip: | 18% $7.02 | 20% $7.80"])
+        XCTAssertEqual(printed, [SuggestedTip(percent: 18, amount: cents(702)), SuggestedTip(percent: 20, amount: cents(780))])
+
+        let guide = ReceiptDraft.suggestedTips(in: [
+            "Tip Guide", "15% = $6.38 | Total $48.89", "18% = $7.65 | Total $50.16", "$8.50 (20%)",
+            "Thank you!", "Visit us again", "Loyalty points 12", "Store #42", "25% | 10.63"])
+        XCTAssertEqual(guide.map(\.percent), [15, 18, 20], "Rows long after the heading aren't part of the table")
+        XCTAssertEqual(guide.map(\.amount), [cents(638), cents(765), cents(850)])
+
+        // Charged service charges and tax rates aren't suggestions.
+        XCTAssertEqual(ReceiptDraft.suggestedTips(in: ["Service Charge 18% | 13.32", "Tax 8.875% | 3.46"]), [])
+        XCTAssertEqual(ReceiptDraft.suggestedTips(in: ["Suggested gratuity", "Sales Tax 8% | 3.12"]), [])
+    }
+
+    func testSuggestedTipsShowWhetherTipsAreFiguredBeforeOrAfterTax() {
+        var draft = ReceiptDraft(subtotal: cents(3900), tax: cents(351), total: cents(4251), source: .appleIntelligence)
+        draft.suggestedTips = [SuggestedTip(percent: 18, amount: cents(702)), SuggestedTip(percent: 20, amount: cents(780))]
+        XCTAssertEqual(draft.suggestedTipBasis, .beforeTax)
+
+        draft.suggestedTips = [SuggestedTip(percent: 18, amount: cents(765)), SuggestedTip(percent: 20, amount: cents(850))]
+        XCTAssertEqual(draft.suggestedTipBasis, .afterTax)
+
+        // A restaurant that rounds down still matches within a cent.
+        draft.suggestedTips = [SuggestedTip(percent: 18, amount: cents(701))]
+        XCTAssertEqual(draft.suggestedTipBasis, .beforeTax)
+
+        draft.suggestedTips = [SuggestedTip(percent: 18, amount: cents(900))]
+        XCTAssertNil(draft.suggestedTipBasis, "Amounts that fit neither base don't decide it")
+        draft.suggestedTips = []
+        XCTAssertNil(draft.suggestedTipBasis)
+    }
+
+    func testTipsMatchTheRestaurantsOwnMath() {
+        let afterTax = TipCalculator(beforeTax: cents(3900), afterTax: cents(4251),
+                                     suggestions: [SuggestedTip(percent: 18, amount: cents(765)),
+                                                   SuggestedTip(percent: 22, amount: cents(935))],
+                                     receiptBasis: .afterTax)
+        XCTAssertEqual(afterTax.percentages, [18, 22], "The receipt's own choices are offered")
+        XCTAssertEqual(afterTax.tip(percent: 18), cents(765), "The printed amount is used as is")
+        XCTAssertEqual(afterTax.tip(percent: 25), cents(1063), "A custom 25% uses the receipt's base, $42.51")
+
+        let noReceipt = TipCalculator(beforeTax: cents(3900), afterTax: cents(4251))
+        XCTAssertEqual(noReceipt.percentages, TipPreset.percentages)
+        XCTAssertEqual(noReceipt.tip(percent: 18), cents(702), "Before tax is the default")
+    }
+
+    func testSplitTipGuideColumnsAreStillTheTipGuide() {
+        // Text recognition read the guide's columns as separate rows.
+        let rows = ["Chicken Tikka Masala | 21.50", "Garlic Naan | 6.50", "Mango Lassi | 12.00",
+                    "Subtotal | 40.00", "Tax 10.25% | 4.10", "Total | 44.10", "TIP GUIDE (on total)",
+                    "15%", "18%", "20%", "Tip $6.62", "Tip $7.94", "Tip $8.82",
+                    "Total $50.72", "Total $52.04", "Total $52.92", "Tip: ________", "Total: ________", "Thank you!"]
+        XCTAssertEqual(ReceiptDraft.tipTableRows(in: rows), Set(6...15))
+        let phone = ReceiptDraft(
+            items: [.init(name: "Chicken Tikka Masala", quantity: 1, price: cents(2150)),
+                    .init(name: "Garlic Naan", quantity: 1, price: cents(650)),
+                    .init(name: "Mango Lassi", quantity: 1, price: cents(1200))],
+            subtotal: cents(4000), tax: cents(410), total: cents(5204), isTippedService: true,
+            source: .appleIntelligence
+        ).grounded(in: rows).reconciled()
+        XCTAssertEqual(phone.total, cents(4410))
+        XCTAssertEqual(phone.issues, [])
+        // Read in column order, "20% Tip $6.62" would pair the wrong amount;
+        // it doesn't fit this bill, so no suggestion is offered at all.
+        XCTAssertEqual(phone.suggestedTips, [])
+    }
+
+    func testItemSplitFollowsTheReceiptsTipBase() {
+        let session = SplitSession()
+        var draft = ReceiptDraft(items: [.init(name: "Noodles", quantity: 1, price: cents(3900))],
+                                 subtotal: cents(3900), tax: cents(351), total: cents(4251),
+                                 category: "Food", isTippedService: true, source: .appleIntelligence)
+        draft.suggestedTips = [SuggestedTip(percent: 18, amount: cents(765)), SuggestedTip(percent: 20, amount: cents(850))]
+        session.apply(draft, replacingItems: true)
+        session.tipSelection = 18
+        XCTAssertEqual(Money(session.totalTipAmount), cents(765))
+        XCTAssertEqual(Money(session.grandTotal), cents(5016))
+
+        // After an edit the printed amounts no longer apply, but the base does.
+        session.taxAmount = 4.00
+        XCTAssertEqual(Money(session.totalTipAmount), cents(774), "18% of $43.00")
+
+    }
+
+    func testTippingFollowsTheRegionNotTheLanguage() {
+        XCTAssertTrue(TipPreset.isCustomary(in: Locale(identifier: "zh_Hans_US")))
+        XCTAssertTrue(TipPreset.isCustomary(in: Locale(identifier: "en_CA")))
+        XCTAssertFalse(TipPreset.isCustomary(in: Locale(identifier: "zh_CN")))
+        XCTAssertFalse(TipPreset.isCustomary(in: Locale(identifier: "en_CN")))
+        XCTAssertFalse(TipPreset.isCustomary(in: Locale(identifier: "ja_JP")))
+    }
+
+    func testTaxOrSuggestedTipReadAsTipIsDropped() {
+        let rows = ["Spicy Beef Noodles | 16.50", "Subtotal | $39.00", "Tax | $3.51", "Total | $42.51",
+                    "Suggested Tip: | 18% $7.02 | 20% $7.80"]
+        let taxAsTip = ReceiptDraft(subtotal: cents(3900), tip: cents(351), total: cents(4251), source: .appleIntelligence)
+            .groundingTip(in: rows)
+        XCTAssertNil(taxAsTip.tip)
+        XCTAssertEqual(taxAsTip.tax, cents(351))
+
+        let suggestion = ReceiptDraft(subtotal: cents(3900), tax: cents(351), tip: cents(702), total: cents(4251), source: .appleIntelligence)
+            .groundingTip(in: rows)
+        XCTAssertNil(suggestion.tip)
+
+        let charged = ReceiptDraft(subtotal: cents(4800), tax: cents(426), tip: cents(900), total: cents(6126), source: .appleIntelligence)
+            .groundingTip(in: ["Subtotal | 48.00", "Tax | 4.26", "Tip | 9.00", "Total | 61.26"])
+        XCTAssertEqual(charged.tip, cents(900))
+        let serviceCharge = ReceiptDraft(tip: cents(2020), total: cents(22220), source: .appleIntelligence)
+            .groundingTip(in: ["服务费 10% | 20.20", "合计 | 222.20"])
+        XCTAssertEqual(serviceCharge.tip, cents(2020))
+    }
+
+    func testRowAmountsReadTheLastPrintedPrice() {
+        XCTAssertEqual(ReceiptDraft.lastAmount(in: "2 | Hudson Mule | $28.00"), cents(2800))
+        XCTAssertEqual(ReceiptDraft.lastAmount(in: "Big Order | 1234.56"), cents(123_456))
+        XCTAssertEqual(ReceiptDraft.lastAmount(in: "Catering | 1,234.56"), cents(123_456))
+        XCTAssertEqual(ReceiptDraft.lastAmount(in: "Croissant | 2,50 €"), cents(250))
+        XCTAssertEqual(ReceiptDraft.lastAmount(in: "COUPON EGGS | -1.00"), cents(-100))
+        XCTAssertEqual(ReceiptDraft.lastAmount(in: "- add truffle butter $4.00"), cents(400))
+        XCTAssertNil(ReceiptDraft.lastAmount(in: "NYC Sales Tax (8.875%)"))
+        XCTAssertNil(ReceiptDraft.lastAmount(in: "Date: 04/26/2025 | 7:42 PM"))
+        XCTAssertEqual(ReceiptDraft.baseItemName("Grilled Salmon - well done - no asparagus"), "Grilled Salmon")
+    }
+
+    func testItemsAreTiedToTheirPrintedRows() {
+        // What the model returned for a real photo of a sample restaurant receipt.
+        let rows = ["HUDSON LANTERN BISTRO", "2 | Hudson Mule | $28.00", "- extra lime",
+                    "1 | Roasted Beet Salad | $16.00", "- no onions", "- add avocado | $3.00",
+                    "Truffle Fries | $14.00", "- extra sauce | $2.00", "Grilled Salmon | $32.00", "- well done",
+                    "1 | Steak Frites | $36.00", "- add truffle butter $4.00",
+                    "2 | Espresso Martini | $32.00", "Subtotal | $114.00", "Tax | $10.12", "Total | $124.12"]
+        let draft = ReceiptDraft(
+            items: [.init(name: "Hudson Mule", quantity: 2, price: cents(2800)),
+                    .init(name: "Roasted Beet Salad", quantity: 1, price: cents(1600)),
+                    .init(name: "Roasted Beet Salad - no onions - add avocado", quantity: 1, price: cents(1900)),
+                    .init(name: "Truffle Fries", quantity: 1, price: cents(1400)),
+                    .init(name: "Truffle Fries - extra sauce", quantity: 1, price: cents(1600)),
+                    .init(name: "Grilled Salmon - well done", quantity: 1, price: cents(3200)),
+                    .init(name: "Steak Frites - add truffle butter", quantity: 1, price: cents(4000)),
+                    .init(name: "Espresso Martini", quantity: 2, price: cents(6400))],
+            subtotal: cents(11400), tax: cents(1012), total: cents(12412), source: .appleIntelligence
+        ).grounded(in: rows)
+        XCTAssertEqual(draft.items.map(\.name), ["Hudson Mule", "Roasted Beet Salad", "Truffle Fries", "Grilled Salmon", "Steak Frites", "Espresso Martini"])
+        // Printed line totals without the add-ons match this subtotal exactly.
+        XCTAssertEqual(draft.items.map(\.price), [cents(2800), cents(1600), cents(1400), cents(3200), cents(3600), cents(3200)])
+
+        // When add-ons are part of the subtotal, they join the item above them.
+        let withAddOns = ReceiptDraft(
+            items: [.init(name: "Roasted Beet Salad", quantity: 1, price: cents(1600)),
+                    .init(name: "Truffle Fries", quantity: 1, price: cents(1400))],
+            subtotal: cents(3500), source: .appleIntelligence
+        ).grounded(in: ["1 | Roasted Beet Salad | $16.00", "- add avocado | $3.00", "Truffle Fries | $14.00",
+                        "- extra sauce | $2.00", "Subtotal | $35.00"])
+        XCTAssertEqual(withAddOns.items.map(\.price), [cents(1900), cents(1600)])
+    }
+
+    func testPercentReadAsDiscountAndTotalReadAsTaxAreIgnored() {
+        // "dont TVA 10%" became a discount of 10, and the total was read as tax.
+        let draft = ReceiptDraft(
+            merchant: "Café Lumière", currencyCode: "EUR",
+            items: [.init(name: "Croissant", quantity: 1, price: cents(250)),
+                    .init(name: "Café crème", quantity: 1, price: cents(420)),
+                    .init(name: "Jus d'orange", quantity: 1, price: cents(530))],
+            subtotal: cents(1200), discount: cents(1000), tax: cents(1200), total: cents(1200),
+            category: "Food", isTippedService: true, source: .appleIntelligence
+        ).reconciled()
+        XCTAssertNil(draft.discount)
+        XCTAssertNil(draft.tax)
+        XCTAssertEqual(draft.itemsForSplit().map(\.price), [cents(250), cents(420), cents(530)])
+        XCTAssertEqual(draft.issues, [.differentCurrency("EUR")])
+    }
+
+    func testCouponsSplitBetweenALineAndASummaryAreBothCounted() {
+        let draft = ReceiptDraft(
+            items: [.init(name: "BANANAS", quantity: 1, price: cents(129)),
+                    .init(name: "CHICKEN THIGHS", quantity: 1, price: cents(1124)),
+                    .init(name: "COUPON EGGS", quantity: 1, price: cents(-100))],
+            subtotal: cents(1103), discount: cents(-50), tax: cents(97), total: cents(1200),
+            category: "Grocery", isTippedService: false, source: .appleIntelligence
+        ).reconciled()
+        XCTAssertEqual(draft.discount, cents(150))
+        XCTAssertEqual(draft.discountSpreadAcrossItems, cents(150))
+        XCTAssertTrue(draft.issues.isEmpty)
     }
 
     // MARK: - Splitting a scanned receipt
@@ -437,6 +823,53 @@ final class ReceiptIntelligenceTests: XCTestCase {
         XCTAssertEqual(draft.category, "Food")
         XCTAssertEqual(draft.isTippedService, true)
         XCTAssertEqual(draft.merchant, "Harbor Noodle House")
+    }
+
+    /// Reads the photos in docs/test-receipts, the set used for manual phone
+    /// testing, and checks the amount each one should record. Needs the
+    /// on-device model; the outputs are attached for the test plan.
+    func testManualTestReceiptsRecordTheirDocumentedTotals() async throws {
+        guard #available(iOS 26.0, *), ReceiptIntelligenceStatus.current == .ready else {
+            throw XCTSkip("Apple Intelligence isn't available on this runtime")
+        }
+        let folder = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("docs/test-receipts")
+        let expectedTotals: [String: Int64] = [
+            "01-restaurant-suggested-tip": 4251, "02-restaurant-tip-charged": 6126,
+            "03-grocery-long-coupons": 7802, "04-pharmacy-unit-price": 2935, "05-cafe-tip": 1290,
+            "06-chinese-hotpot-service": 22220, "07-chinese-supermarket": 8315,
+            "08-euro-cafe-vat-included": 1200, "09-ride-fee-tip": 2318,
+            "10-group-dinner-service-charge": 9389, "11-faded-deli": 2229,
+            // Real photos of printed sample receipts, provided for testing.
+            "13-photo-hudson-lantern-bistro": 26239, "14-photo-east-village-noodle-house": 12069,
+            "15-photo-brooklyn-harbor-grill": 19925, "16-restaurant-tip-after-tax": 4410
+        ]
+        var report: [String] = []
+        for name in (expectedTotals.keys.sorted() + ["12-not-a-receipt"]) {
+            let url = folder.appendingPathComponent("\(name).jpg")
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                XCTFail("Missing \(name).jpg; run scripts/test-receipts/make_test_receipts.swift")
+                continue
+            }
+            do {
+                let draft = try await ReceiptReader().read([ReceiptPage(image: image, orientation: .up)])
+                report.append("\(name): total=\(draft.amountToRecord.map { "\($0.amount)" } ?? "-") merchant=\(draft.merchant ?? "-") category=\(draft.category ?? "-") tipped=\(draft.isTippedService.map(String.init) ?? "-") items=\(draft.items.count) split=\(draft.itemsForSplit().count) tax=\(draft.taxForSplit?.amount ?? 0) tip=\(draft.tip?.amount ?? 0) discount=\(draft.discount?.amount ?? 0) date=\(draft.date.map { $0.formatted(date: .numeric, time: .omitted) } ?? "-") verified=\(draft.isVerified) suggested=\(draft.suggestedTips.map { "\($0.percent)%:\($0.amount.amount)" }) basis=\(draft.suggestedTipBasis.map { "\($0)" } ?? "-") issues=\(draft.issues)")
+                if let expected = expectedTotals[name] {
+                    XCTAssertEqual(draft.amountToRecord, Money(minorUnits: expected), name)
+                } else {
+                    XCTAssertNil(draft.amountToRecord, "\(name) has no total to find")
+                }
+            } catch {
+                report.append("\(name): error=\(error.localizedDescription)")
+                XCTAssertNil(expectedTotals[name], "\(name) should have been read")
+            }
+        }
+        let attachment = XCTAttachment(string: report.joined(separator: "\n"))
+        attachment.name = "Manual test receipts"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     /// Renders a fictional receipt, then runs the real Vision and model path.

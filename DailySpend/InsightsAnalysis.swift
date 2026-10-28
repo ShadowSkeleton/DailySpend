@@ -18,105 +18,202 @@ struct CustomTabSwitcher: View {
     }
 }
 
-// MARK: - Insight Analysis Card
-struct InsightAnalysisCard: View {
+// MARK: - Glance
+
+/// The top of Insights, on both tabs: this month at a glance, read as one
+/// sentence. "October so far: $3,219 less (green) than this time last month",
+/// then what you've spent and what moved. The full summary is one tap away
+/// under Details. Without a fair comparison it shows the total.
+struct InsightsGlanceCard: View {
     let expenses: [Expense]
+    let budget: Money?
+    let themeColor: Color
+
     @State private var showInfo = false
-
-    var analysis: (diff: Double, driver: String, driverAmount: Double, isUp: Bool)? {
-        let calendar = Calendar.current
-        let now = Date()
-        let startOfThisMonth = now.startOfMonth()
-        
-        guard let startOfLastMonth = calendar.date(byAdding: .month, value: -1, to: startOfThisMonth),
-              let endOfLastMonthMTD = calendar.date(byAdding: .month, value: -1, to: now) else { return nil }
-        
-        let thisMonthExpenses = expenses.filter { $0.date >= startOfThisMonth && $0.date <= now }
-        let lastMonthExpenses = expenses.filter { $0.date >= startOfLastMonth && $0.date <= endOfLastMonthMTD }
-        
-        let thisTotal = thisMonthExpenses.reduce(0) { $0 + $1.normalizedAmount }
-        let lastTotal = lastMonthExpenses.reduce(0) { $0 + $1.normalizedAmount }
-        
-        if thisTotal == 0 && lastTotal == 0 { return nil }
-        let diff = thisTotal - lastTotal
-        if abs(diff) < 1 { return nil }
-        
-        let thisCats = Dictionary(grouping: thisMonthExpenses, by: { $0.category }).mapValues { $0.reduce(0) { $0 + $1.normalizedAmount } }
-        let lastCats = Dictionary(grouping: lastMonthExpenses, by: { $0.category }).mapValues { $0.reduce(0) { $0 + $1.normalizedAmount } }
-        let allCategories = Set(thisCats.keys).union(lastCats.keys)
-        
-        var driverCat = ""; var driverDelta = 0.0
-        if diff > 0 {
-            var maxIncrease = -Double.infinity
-            for cat in allCategories {
-                let increase = (thisCats[cat] ?? 0) - (lastCats[cat] ?? 0)
-                if increase > maxIncrease { maxIncrease = increase; driverCat = cat }
-            }
-            driverDelta = maxIncrease
-        } else {
-            var maxDecrease = Double.infinity
-            for cat in allCategories {
-                let decrease = (thisCats[cat] ?? 0) - (lastCats[cat] ?? 0)
-                if decrease < maxDecrease { maxDecrease = decrease; driverCat = cat }
-            }
-            driverDelta = maxDecrease
-        }
-        return (diff, driverCat, driverDelta, diff > 0)
-    }
-
-    private func signedChangeAmount(for data: (diff: Double, driver: String, driverAmount: Double, isUp: Bool)) -> String {
-        let sign = data.isUp ? "+" : "−"
-        return sign + abs(data.diff).formatted(.currency(code: L10n.currencyCode))
-    }
-
-    private func driverDescription(for data: (diff: Double, driver: String, driverAmount: Double, isUp: Bool)) -> String {
-        let categoryName = L10n.categoryName(data.driver)
-        return L10n.isZh
-            ? "\(categoryName) 是主要原因。"
-            : "\(categoryName) drove the \(data.isUp ? "increase" : "decrease")."
-    }
+    @State private var wording: RecapWording?
+    @State private var isWriting = false
+    @State private var showsDetails = false
 
     var body: some View {
-        if let data = analysis {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text(L10n.isZh ? "月度变化" : "Monthly Change")
-                        .font(.headline)
+        let period = SpendingPeriod.monthToDate(now: Date())
+        if let recap = PeriodRecap.make(records: expenses.map(\.spendingRecord), period: period, budget: budget) {
+            let facts = RecapText.facts(for: recap)
+            // Words written for other facts are never shown.
+            let shown = wording.flatMap { $0.factsSignature == RecapWording.signature(for: facts) ? $0 : nil }
+            card {
+                headline(recap)
+                if recap.previousTotal == nil {
+                    Label(L10n.isZh ? "满一个月后，这里会显示与上月的对比。"
+                                    : "After your first full month, you'll see how each month compares here.",
+                          systemImage: "calendar")
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
-                    Button(action: { UIImpactFeedbackGenerator(style: .light).impactOccurred(); showInfo = true }) {
-                        Image(systemName: "questionmark.circle").font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    Spacer()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("insights-first-month")
                 }
-                // The comparison window used to be explained only behind the
-                // help button; a month-to-date number needs it in plain sight.
-                Text(L10n.isZh ? "与上月同期相比" : "Compared with the same days last month")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, -8)
-                Text(signedChangeAmount(for: data))
-                    .font(.system(size: 42, weight: .heavy, design: .rounded))
-                    .foregroundStyle(data.isUp ? .red : .green)
-                    .contentTransition(.numericText())
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-                Text(driverDescription(for: data))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .accessibilityLabel(
-                        L10n.isZh
-                            ? "与上月同期相比，\(driverDescription(for: data))"
-                            : "Compared with the same point last month. \(driverDescription(for: data))"
-                    )
+                details(recap, facts: facts, wording: shown)
             }
-            .padding(20).background(Color(uiColor: .secondarySystemGroupedBackground)).cornerRadius(20)
-            .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6).padding(.horizontal)
-            .alert(L10n.isZh ? "统计逻辑" : "Calculation Logic", isPresented: $showInfo) { Button(L10n.ok, role: .cancel) { } } message: {
-                Text(L10n.isZh ? "此数据对比的是【本月1号至今】与【上月1号至同日】的支出总额（MTD 同期对比）。" : "This compares your spending from the start of this month to today, against the start of last month to the same day (Month-to-Date).")
+            .alert(L10n.isZh ? "统计逻辑" : "Calculation Logic", isPresented: $showInfo) {
+                Button(L10n.ok, role: .cancel) { }
+            } message: {
+                Text(RecapText.comparisonExplanation(period))
+            }
+            .task(id: facts.joined(separator: "\n")) { await loadWording(for: recap, facts: facts) }
+        } else if !expenses.isEmpty {
+            // History, but nothing yet this month.
+            card {
+                Text(RecapText.title(for: period)).font(.headline).foregroundStyle(.secondary)
+                Text(RecapText.wholeMoney(.zero))
+                    .font(.system(size: 42, weight: .heavy, design: .rounded))
+                    .foregroundStyle(themeColor)
+                Text(L10n.isZh ? "本月还没有支出" : "No spending yet this month")
+                    .font(.subheadline).foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .cornerRadius(20)
+            .shadow(color: Color.black.opacity(0.06), radius: 12, x: 0, y: 6)
+            .padding(.horizontal)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("insights-glance")
+    }
+
+    // MARK: The big number
+
+    @ViewBuilder
+    private func headline(_ recap: PeriodRecap) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(RecapText.title(for: recap.period))
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                if recap.previousTotal != nil {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showInfo = true
+                    } label: {
+                        Image(systemName: "questionmark.circle").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel(L10n.isZh ? "统计逻辑" : "How this is calculated")
+                }
+            }
+            let headline = RecapText.headline(for: recap)
+            Text(headline.text)
+                .font(.system(size: 42, weight: .heavy, design: .rounded))
+                .foregroundStyle(headline.tone == .up ? Color.red : headline.tone == .down ? Color.green : themeColor)
+                .contentTransition(.numericText())
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+                .accessibilityIdentifier("insights-headline")
+            Text(RecapText.headlineCaption(for: recap))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            // One idea per line, so an amount never wraps away from its words.
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(RecapText.quickLines(for: recap), id: \.self) { line in
+                    Text(line)
+                        .font(.body.weight(.medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .padding(.top, 8)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("insights-quick-line")
+        }
+    }
+
+    // MARK: Details
+
+    private func details(_ recap: PeriodRecap, facts: [String], wording: RecapWording?) -> some View {
+        DisclosureGroup(isExpanded: $showsDetails) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(wording?.paragraph(for: recap) ?? RecapText.summary(for: recap))
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("insights-summary-text")
+                if isWriting {
+                    Label(L10n.isZh ? "正在撰写小结…" : "Writing your summary…", systemImage: "sparkles")
+                        .font(.caption)
+                        .foregroundStyle(themeColor)
+                        .symbolEffect(.pulse, options: .repeating)
+                }
+                // The key numbers at a glance; the graph below has the rest.
+                HStack(spacing: 8) {
+                    ForEach(RecapText.tiles(for: recap), id: \.label) { tile in
+                        DetailTile(tile: tile)
+                    }
+                }
+                if recap.laterThisMonth > .zero {
+                    Text(L10n.isZh ? "另有 \(RecapText.money(recap.laterThisMonth)) 记在本月稍后日期，到那天才计入。"
+                                   : "Plus \(RecapText.money(recap.laterThisMonth)) dated later this month, counted once that day comes.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if wording?.isFromModel == true {
+                    Text(L10n.isZh ? "最后一句由 Apple 智能在本机撰写，可能出错。"
+                                   : "The last sentence was written on this device by Apple Intelligence. AI can make mistakes.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.top, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Text(L10n.isZh ? "详情" : "Details")
+                .font(.subheadline.weight(.semibold))
+        }
+        .tint(themeColor)
+    }
+
+    /// The saved wording when the facts are unchanged; otherwise the code's
+    /// words at once, then the model's once written.
+    private func loadWording(for recap: PeriodRecap, facts: [String]) async {
+        if let cached = RecapWording.cached(for: recap, facts: facts) {
+            wording = cached
+            return
+        }
+        isWriting = ReceiptIntelligenceStatus.current == .ready
+        let made = await RecapWording.make(for: recap, facts: facts)
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeInOut) {
+            wording = made
+            isWriting = false
+        }
+        made.store(for: recap)
+    }
+}
+
+/// One key number under Details: a small label over its value.
+private struct DetailTile: View {
+    let tile: RecapText.Tile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(tile.label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(tile.value)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(tile.tone == .up ? Color.red : tile.tone == .down ? Color.green : Color.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -240,13 +337,13 @@ struct CategoryRankingRow: View {
                             }
                             .frame(width: 36)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(expense.note.isEmpty ? item.displayName : expense.note).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
+                                Text(expense.notePreview.isEmpty ? item.displayName : expense.notePreview).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
                                 if let freq = expense.frequency, freq != .none {
                                     HStack(spacing: 2) { Image(systemName: "repeat").font(.caption2); Text(L10n.isZh ? "定期" : "Recurring").font(.caption2) }.foregroundStyle(.secondary)
                                 }
                             }
                             Spacer()
-                            Text(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode))).font(.subheadline).fontWeight(.medium).foregroundStyle(item.color)
+                            Text(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode))).font(.subheadline).fontWeight(.medium).foregroundStyle(item.color).fixedSize()
                         }
                         .padding(.horizontal, 16).padding(.vertical, 12).background(Color.gray.opacity(0.03))
                         .overlay(Rectangle().frame(height: 0.5).foregroundColor(Color.gray.opacity(0.1)), alignment: .bottom)

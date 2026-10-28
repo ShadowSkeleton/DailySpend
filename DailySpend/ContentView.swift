@@ -18,24 +18,52 @@ struct ContentView: View {
     // Tab 选中状态管理
     @State private var selectedTab = 0
     @State private var pendingQuickAdd = false
+    @State private var pendingScan = false
+    /// Requests from Siri, Shortcuts, and Control Center.
+    @State private var router = AppRouter.shared
     @State private var syncTask: Task<Void, Never>? = nil
     @State private var isLocked = true
     @State private var isAuthenticating = false
     @State private var unlockErrorMessage: String?
     @State private var canDisableAppLock = false
+    /// The one-time 2.0 tour, while it is showing.
+    @State private var tourKind: WhatsNew.Kind?
+    /// Set when Siri, a widget, or a control opened the app for a task; the
+    /// tour waits until DailySpend is next opened on its own.
+    @State private var deferTour = false
+    @State private var tourShownThisLaunch = false
     @Environment(\.scenePhase) private var scenePhase
     
     let themeColor = Color(red: 0.0, green: 0.78, blue: 0.70)
     let backgroundColor = Color(uiColor: .systemGroupedBackground)
     
     var body: some View {
+        tabs
+        .fullScreenCover(isPresented: Binding(
+            get: { tourKind != nil },
+            set: { if !$0 { tourKind = nil } }
+        )) {
+            if let tourKind {
+                WhatsNewTour(kind: tourKind, themeColor: themeColor, onFinish: finishTour)
+            }
+        }
+        .task {
+            // A Siri or widget launch delivers its request right after the
+            // first frame; give it a moment so the tour doesn't cover it.
+            try? await Task.sleep(for: .milliseconds(600))
+            presentTourIfNeeded()
+        }
+        .onChange(of: isLocked) { _, _ in presentTourIfNeeded() }
+    }
+
+    private var tabs: some View {
         // 绑定 selection
         TabView(selection: $selectedTab) {
             // 1. 首页
             HomeView(themeColor: themeColor, onOpenSplitBill: {
                 withAnimation(.snappy) { selectedTab = 1 }
-            }, pendingQuickAdd: $pendingQuickAdd,
-               canOpenQuickAdd: selectedTab == 0 && scenePhase == .active && (!isAppLockEnabled || !isLocked))
+            }, pendingQuickAdd: $pendingQuickAdd, pendingScan: $pendingScan,
+               canOpenQuickAdd: selectedTab == 0 && scenePhase == .active && (!isAppLockEnabled || !isLocked) && tourKind == nil)
                 .tabItem { Label(L10n.home, systemImage: "house.fill") }
                 .tag(0)
             
@@ -123,18 +151,25 @@ struct ContentView: View {
             if phase == .active {
                 syncWidgetNow()
                 unlockIfNeeded()
+                presentTourIfNeeded()
             } else {
                 syncWidgetNow()
                 if isAppLockEnabled { isLocked = true }
+                if phase == .background { deferTour = false }
             }
         }
         .onOpenURL { url in
-            guard url.scheme == "dailyspend" else { return }
-            if url.host == "home" || url.host == "add" {
+            guard url.scheme == DailySpendLink.scheme else { return }
+            if url.host == "home" || url.host == "add" || url.host == "scan" {
+                // Opening Home from the widget is an ordinary launch.
+                if url.host != "home" { setTourAside() }
                 withAnimation(.snappy) { selectedTab = 0 }
                 if url.host == "add" { pendingQuickAdd = true }
+                if url.host == "scan" { pendingScan = true }
             }
         }
+        .onChange(of: router.pendingAction) { _, _ in takeRouterAction() }
+        .task { takeRouterAction() }
     }
     
     var currentMonthTotal: Double {
@@ -158,6 +193,42 @@ struct ContentView: View {
     // existing expense must refresh the widget as reliably as inserting one.
     private var expenseWidgetValues: [ExpenseWidgetValue] {
         expenses.map { ExpenseWidgetValue(id: $0.id, date: $0.date, cents: $0.money.minorUnits) }
+    }
+
+    /// Opens what Siri or a shortcut asked for. Home waits for App Lock.
+    private func takeRouterAction() {
+        guard let action = router.pendingAction else { return }
+        router.pendingAction = nil
+        setTourAside()
+        withAnimation(.snappy) { selectedTab = 0 }
+        switch action {
+        case .addExpense: pendingQuickAdd = true
+        case .scanReceipt: pendingScan = true
+        }
+    }
+
+    private func presentTourIfNeeded() {
+        guard tourKind == nil, !tourShownThisLaunch, !deferTour,
+              scenePhase == .active, !(isAppLockEnabled && isLocked),
+              router.pendingAction == nil, !pendingQuickAdd, !pendingScan,
+              WhatsNew.needsTour() else { return }
+        tourShownThisLaunch = true
+        tourKind = WhatsNew.kind(expenseCount: expenses.count)
+    }
+
+    private func finishTour() {
+        WhatsNew.markSeen()
+        tourKind = nil
+    }
+
+    /// Siri, a widget, or a control asked for something: that comes first,
+    /// and an unfinished tour shows again next time.
+    private func setTourAside() {
+        deferTour = true
+        if tourKind != nil {
+            tourKind = nil
+            tourShownThisLaunch = false
+        }
     }
 
     private func syncWidgetNow() {

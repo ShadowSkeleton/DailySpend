@@ -49,25 +49,16 @@ struct SplitBillBasketView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                scanSection
-                peopleSection
+                scanSection.simultaneousGesture(finishItemOnTap)
+                peopleSection.simultaneousGesture(finishItemOnTap)
                 itemsSection
-                totalsSection
-                summarySection
+                totalsSection.simultaneousGesture(finishItemOnTap)
+                summarySection.simultaneousGesture(finishItemOnTap)
                 exportSection
             }
             .padding(.top, 8)
         }
         .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                KeyboardDismissButton {
-                    focusedField = nil
-                    UIApplication.dismissKeyboard()
-                }
-            }
-        }
         .background(Color(uiColor: .systemGroupedBackground))
         // Sheet for recording expense per person
         .sheet(item: $recordingPerson) { person in
@@ -121,6 +112,13 @@ struct SplitBillBasketView: View {
             updateReceipt()
         }
         .onChange(of: session.taxAmount) { _, _ in updateReceipt() }
+        // A typed item is added when the person moves on, so forgetting the
+        // + button never loses it.
+        .onChange(of: focusedField) { oldField, newField in
+            let wasEditingItem = oldField == .itemName || oldField == .itemPrice
+            let isEditingItem = newField == .itemName || newField == .itemPrice
+            if wasEditingItem && !isEditingItem { commitPendingItem() }
+        }
         .onReceive(session.objectWillChange) { _ in
             DispatchQueue.main.async { updateReceipt() }
         }
@@ -240,15 +238,16 @@ struct SplitBillBasketView: View {
                 SplitItemRow(item: item, session: session, themeColor: themeColor) {
                     withAnimation { session.removeItem(id: item.id) }
                 }
+                .simultaneousGesture(finishItemOnTap)
             }
 
             Divider()
             // Add Item Input
             HStack(spacing: 12) {
                 TextField(L10n.isZh ? "项目名称" : "Item name", text: $newItemName)
-                    .submitLabel(.next)
+                    .submitLabel(hasPendingItem ? .done : .next)
                     .focused($focusedField, equals: .itemName)
-                    .onSubmit { focusedField = .itemPrice }
+                    .onSubmit { hasPendingItem ? addItem() : (focusedField = .itemPrice) }
                     .accessibilityIdentifier("split-item-name")
 
                 HStack(spacing: 2) {
@@ -268,7 +267,7 @@ struct SplitBillBasketView: View {
                         .font(.title)
                         .foregroundStyle(themeColor)
                 }
-                .disabled(newItemPrice.map { !ExpenseInputValidator.isValidLineItemAmount($0) } ?? true)
+                .disabled(!hasPendingItem)
                 .accessibilityLabel(L10n.isZh ? "添加项目" : "Add item")
                 .accessibilityIdentifier("split-add-item")
             }
@@ -305,7 +304,8 @@ struct SplitBillBasketView: View {
                         customPercentage: $session.customTipPercentage,
                         fixedAmount: $session.customFixedTip,
                         tipAmount: session.totalTipAmount,
-                        themeColor: themeColor)
+                        themeColor: themeColor,
+                        calculator: session.tipCalculator)
 
             Divider()
 
@@ -350,6 +350,7 @@ struct SplitBillBasketView: View {
                         }
                     },
                     onRecord: {
+                        commitPendingItem()
                         UIApplication.dismissKeyboard()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                             // Use the freshest computed value when the sheet opens.
@@ -363,7 +364,10 @@ struct SplitBillBasketView: View {
     }
 
     private var exportSection: some View {
-        Button(action: { onRequestShare?() }) {
+        Button(action: {
+            commitPendingItem()
+            onRequestShare?()
+        }) {
             HStack {
                 Image(systemName: "square.and.arrow.up")
                 Text(L10n.isZh ? "导出收据" : "Share Receipt")
@@ -386,13 +390,36 @@ struct SplitBillBasketView: View {
 
     // MARK: - Logic Methods
 
+    /// Tapping anywhere outside the add row finishes the item being typed,
+    /// like tapping outside a form closes its keyboard.
+    private var finishItemOnTap: some Gesture {
+        TapGesture().onEnded {
+            if isEditingNewItem { focusedField = nil }
+        }
+    }
+
+    private var isEditingNewItem: Bool {
+        focusedField == .itemName || focusedField == .itemPrice
+    }
+
+    private var hasPendingItem: Bool {
+        newItemPrice.map(ExpenseInputValidator.isValidLineItemAmount) ?? false
+    }
+
+    /// Adds the item and keeps the cursor in the add row for the next one.
     private func addItem() {
-        guard let price = newItemPrice,
-              ExpenseInputValidator.isValidLineItemAmount(price) else { return }
-        withAnimation { session.addItem(name: newItemName, price: price) }
+        guard commitPendingItem() else { return }
+        focusedField = .itemName
+    }
+
+    /// Adds the typed item, if it has a price, and clears the add row.
+    @discardableResult
+    private func commitPendingItem() -> Bool {
+        guard let price = newItemPrice, hasPendingItem else { return false }
+        withAnimation { session.addItem(name: newItemName.trimmingCharacters(in: .whitespacesAndNewlines), price: price) }
         newItemName = ""
         newItemPrice = nil
-        focusedField = .itemName
+        return true
     }
 
     private var personEditorTitle: String {
@@ -499,7 +526,8 @@ struct SplitItemRow: View {
                     Text(item.name.isEmpty ? (L10n.isZh ? "项目" : "Item") : item.name)
                         .fontWeight(.medium)
                     Text(priceCaption)
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(sharers.isEmpty ? Color.orange : Color.secondary)
                         .monospacedDigit()
                 }
                 Spacer()
@@ -511,13 +539,6 @@ struct SplitItemRow: View {
             }
 
             FlowLayout(spacing: 6) {
-                if session.people.count > 1 {
-                    PersonToggleChip(title: L10n.isZh ? "所有人" : "Everyone",
-                                     isSelected: session.isEveryoneIncluded(in: item),
-                                     themeColor: themeColor) {
-                        session.toggleEveryone(inItem: item.id)
-                    }
-                }
                 ForEach(session.people) { person in
                     PersonToggleChip(title: displayName(person),
                                      isSelected: item.involvedPersonIDs.contains(person.id),
@@ -525,20 +546,54 @@ struct SplitItemRow: View {
                         session.togglePerson(person.id, inItem: item.id)
                     }
                 }
+                // A plain action, not another chip, so only people are ever
+                // highlighted and "everyone" is never shown twice.
+                if session.people.count > 1 {
+                    Button(isEveryone ? (L10n.isZh ? "清除" : "Clear") : (L10n.isZh ? "全选" : "Select All")) {
+                        session.toggleEveryone(inItem: item.id)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(themeColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 7)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("item-select-all")
+                }
             }
         }
         .padding(16)
     }
 
+    private var sharers: [SplitPerson] { session.peopleIncluded(in: item) }
+
+    private var isEveryone: Bool { session.isEveryoneIncluded(in: item) }
+
+    /// Who shares the item, in words: "Everyone · $10.00 each", "Alex only".
     private var priceCaption: String {
         let price = item.price.formatted(.currency(code: L10n.currencyCode))
-        let count = session.peopleIncluded(in: item).count
-        guard count > 1 else { return price }
+        let count = sharers.count
+        guard count > 0 else {
+            return L10n.isZh ? "\(price) · 请选择谁分摊" : "\(price) · Choose who shares this"
+        }
+        guard count > 1 else {
+            let name = displayName(sharers[0])
+            return session.people.count > 1 ? (L10n.isZh ? "\(price) · 仅\(name)" : "\(price) · \(name) only") : price
+        }
         let shares = Money.splitEvenly(Money(item.price), among: count)
         let each = shares[0].amount.formatted(.currency(code: L10n.currencyCode))
         // When cents don't divide evenly the first share is one cent larger.
         let prefix = shares.first == shares.last ? "" : "~"
-        return L10n.isZh ? "\(price) · 每人 \(prefix)\(each)" : "\(price) · \(prefix)\(each) each"
+        let who: String
+        if isEveryone {
+            who = L10n.isZh ? "所有人" : "Everyone"
+        } else if count == 2 {
+            who = L10n.isZh ? "\(displayName(sharers[0]))和\(displayName(sharers[1]))"
+                            : "\(displayName(sharers[0])) & \(displayName(sharers[1]))"
+        } else {
+            who = L10n.isZh ? "\(count) 人" : "\(count) people"
+        }
+        return L10n.isZh ? "\(price) · \(who) · 每人 \(prefix)\(each)" : "\(price) · \(who) · \(prefix)\(each) each"
     }
 
     private func displayName(_ person: SplitPerson) -> String {
@@ -619,7 +674,7 @@ struct PersonTotalCard: View {
                     let extras = session.taxAndTip(for: person)
                     if extras > 0 {
                         HStack {
-                            Text(L10n.isZh ? "税费与小费" : "Tax & tip")
+                            Text(TipPreset.extrasLabel(hasTip: session.hasTip))
                                 .font(.subheadline).italic()
                                 .foregroundStyle(themeColor)
                             Spacer()

@@ -41,6 +41,26 @@ final class MoneyAndSplitTests: XCTestCase {
         XCTAssertEqual(amount, 1_224.50)
     }
 
+    /// Phones without Apple Intelligence read the total with this parser, so
+    /// European receipts with decimal commas must work too.
+    func testReceiptParserReadsDecimalCommaTotals() {
+        let euroCafe = ReceiptAmountParser.bestAmount(from: [
+            .init(text: "24/10/2026 09:40", boundingBox: CGRect(x: 0.1, y: 0.8, width: 0.6, height: 0.03)),
+            .init(text: "Croissant 2,50 €", boundingBox: CGRect(x: 0.1, y: 0.7, width: 0.6, height: 0.03)),
+            .init(text: "TOTAL TTC 12,00 €", boundingBox: CGRect(x: 0.1, y: 0.5, width: 0.6, height: 0.03)),
+            .init(text: "dont TVA 10% 1,09 €", boundingBox: CGRect(x: 0.1, y: 0.45, width: 0.6, height: 0.03)),
+            .init(text: "CB 12,00 €", boundingBox: CGRect(x: 0.1, y: 0.4, width: 0.6, height: 0.03))
+        ])
+        XCTAssertEqual(euroCafe, 12.00)
+
+        XCTAssertEqual(ReceiptAmountParser.currencyAmount(in: "Total 1.234,56 €"), 1_234.56)
+        XCTAssertEqual(ReceiptAmountParser.currencyAmount(in: "Total $1,224.50"), 1_224.50)
+        XCTAssertEqual(ReceiptAmountParser.currencyAmount(in: "Total 12.50"), 12.50)
+        // Thousands without cents and dates are not prices.
+        XCTAssertNil(ReceiptAmountParser.currencyAmount(in: "Points 1,234"))
+        XCTAssertNil(ReceiptAmountParser.currencyAmount(in: "24/10/2026"))
+    }
+
     func testEvenSplitDistributesEveryCent() {
         let shares = Money.splitEvenly(Money(10), among: 3)
 
@@ -176,6 +196,20 @@ final class MoneyAndSplitTests: XCTestCase {
         XCTAssertTrue(receipt.items.filter { $0.style == .detail }.isEmpty)
         XCTAssertTrue(receipt.items.contains(.text(L10n.isZh ? "未命名" : "Guest", "")))
         XCTAssertTrue(receipt.items.contains(.currency("Tea", 0.01)))
+    }
+
+    func testQuickSplitReceiptLeadsWithEachPersonsShare() throws {
+        let receipt = ReceiptData(
+            title: "Harbor Noodle House", items: [.integer("People", 2)],
+            subtotal: 42.51, tax: 0, tip: 7.02, total: 49.53, footer: "",
+            date: Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 24)),
+            highlight: ReceiptHighlight(label: "My share", amount: 24.77, caption: "1 pays $24.77 • 1 pays $24.76"))
+        let image = try XCTUnwrap(ReceiptImageExporter.image(data: receipt, scale: 2))
+        XCTAssertEqual(image.size.width, 375)
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "Quick split receipt"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testApprovedSharedReceiptLayoutRendersShortLongAndMultipleNames() throws {
@@ -425,7 +459,7 @@ final class MoneyAndSplitTests: XCTestCase {
     }
 
     func testExpenseModelPersistsStableIDAndRecurrenceState() throws {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(
             for: Expense.self,
             CategoryBudget.self,
@@ -597,7 +631,7 @@ final class MoneyAndSplitTests: XCTestCase {
         try ModelContainer(
             for: Expense.self,
             CategoryBudget.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
     }
 }

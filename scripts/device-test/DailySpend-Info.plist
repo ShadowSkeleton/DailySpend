@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.jackson.DailySpend.devicetest</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dailyspendtest</string>
+			</array>
+		</dict>
+	</array>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Daily Spend Test</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Daily Spend</string>
+		</dict>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>DailySpend uses the camera to scan a receipt and suggest its total. Receipt images are processed on your device.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>DailySpend can use Face ID to protect your financial records when you turn on App Lock.</string>
+</dict>
+</plist>

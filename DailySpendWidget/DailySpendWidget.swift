@@ -7,6 +7,10 @@ struct DailySpendWidgets: WidgetBundle {
     var body: some Widget {
         QuickAddWidget()
         DashboardWidget()
+        if #available(iOS 18.0, *) {
+            ScanReceiptControl()
+            AddExpenseControl()
+        }
     }
 }
 
@@ -75,7 +79,7 @@ struct QuickAddWidgetEntryView : View {
                 Text(labelText).font(.system(size: 14, weight: .bold, design: .rounded)).foregroundColor(.white).shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
             }
         }
-        .widgetURL(URL(string: "dailyspend://add"))
+        .widgetURL(DailySpendLink.url("add"))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Locale.current.identifier.hasPrefix("zh") ? "在 DailySpend 中新增支出" : "Add a new expense in DailySpend")
     }
@@ -191,7 +195,7 @@ struct DashboardWidgetEntryView : View {
                 smallLayout
             }
         }
-        .widgetURL(URL(string: "dailyspend://home"))
+        .widgetURL(DailySpendLink.url("home"))
         .privacySensitive()
         // 关键：强制组件内容使用深色模式的配色逻辑（白字）
         .colorScheme(.dark)

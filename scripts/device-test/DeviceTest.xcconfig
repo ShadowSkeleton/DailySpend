@@ -1,0 +1,21 @@
+// Builds "DailySpend Test", a copy of the app that installs beside the
+// App Store version on a personal iPhone without touching its data.
+//
+// Passed to xcodebuild with -xcconfig, so it overrides the project's settings
+// for this build only. The shipping identifiers in the project never change.
+//
+// - Its own bundle IDs: separate app container, so it starts with empty data.
+// - No iCloud, App Group, or push entitlements: it can't read or sync your
+//   real records, and its widgets can't overwrite the public widget snapshot.
+//   DAILYSPEND_DEVICE_TEST makes the app open a local-only store, because
+//   CloudKit setup traps when the iCloud entitlement is missing.
+// - No URL scheme: links such as dailyspend://add keep opening the App Store app.
+
+DS_TEST_BUNDLE_ID_DailySpend = com.jackson.LoveLedger.devicetest
+DS_TEST_BUNDLE_ID_DailySpendWidgetExtension = com.jackson.LoveLedger.devicetest.LoveLedgerWidget
+PRODUCT_BUNDLE_IDENTIFIER = $(DS_TEST_BUNDLE_ID_$(TARGET_NAME))
+
+CODE_SIGN_ENTITLEMENTS = scripts/device-test/DeviceTest.entitlements
+INFOPLIST_FILE = scripts/device-test/$(TARGET_NAME)-Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = DailySpend Test
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DAILYSPEND_DEVICE_TEST

@@ -8,13 +8,17 @@ DailySpend is a native SwiftUI expense tracker and bill-splitting app for iPhone
 
 ## Current status
 
-**Version 2.0 (15) — in development.** Version 2.0 adds on-device Apple Intelligence receipt reading. It has not been through the release quality and data-safety reviews yet, and this is not an announcement of App Store availability. Confirm actual uploaded builds in App Store Connect.
+**Version 2.0 (16) — release candidate, not uploaded.** Version 2.0 adds on-device receipt reading, Quick Add, Siri and Control Center actions, and an Insights summary. Its [quality report](docs/releases/2.0-16-QUALITY.md) and [data-safety report](docs/releases/2.0-16-DATA_SAFETY.md) clear it for upload and a restricted TestFlight test, and hold broad release for device and iCloud checks. This is not an announcement of App Store availability. Confirm actual uploaded builds in App Store Connect.
 
 Version 2.0 adds:
 
 - **Smart receipt scanning:** scan with the camera or pick a photo. On devices with Apple Intelligence, Apple's on-device model reads the store, date, items, tax, tip, and total; DailySpend checks the arithmetic itself and fills a New Expense form to review. A scan button on Home goes straight from receipt to review. Other devices still read the total, as before.
 - **Scan into a split:** Quick Split takes the bill total and any charged tip. By Item takes every line, tax, and tip; "2 × Dumplings" becomes two lines so different people can take each.
 - **Simpler By Item:** one item list instead of separate personal and shared sections. Tap names on an item to choose who shares it; one name makes it personal. People added later join items shared by everyone.
+- **Quick Add in plain words:** type "Lunch with Alex 25" or "昨天打车 23 块" at the top of New Expense and the amount, category, date, and any split fill in.
+- **Siri, Shortcuts, and Controls:** log an expense, scan a receipt, or ask what you've spent this month; Scan Receipt and Add Expense controls for Control Center, the Lock Screen, and the Action button.
+- **Insights quick look:** this month against the same days last month in one sentence, with Details for the exact numbers.
+- **One-time 2.0 tour:** after the update, a short tour shows each new feature. People with existing data start on a page with their expense count and a Back Up Now button; new users get a welcome page. Settings → What's New shows it again.
 - **Polish:** a "None" tip option and a combined Custom tip (% or fixed), the currency symbol beside the amount when adding an expense, a reset icon instead of a red trash can for starting a new split, the Monthly Change comparison window shown on the card, a trend line that no longer overshoots between days, currency symbols on budget settings, and Chinese text for strings that were English-only.
 - **Smarter reading details:** tilted photos are straightened so prices stay with their items; Chinese receipts are read with automatic language detection (1.0 read them as garbled Latin text when English came first); all-capital names are shown in title case; store and pharmacy receipts get no default restaurant tip, so the split matches what was paid.
 - **Fixes:** opening Category Limits no longer rounds a saved limit with cents (for example $180.50) to a whole number, and the "Add your first expense" button shows its plus icon again.
@@ -126,17 +130,24 @@ xcodebuild test \
   -parallel-testing-enabled NO \
   -skip-testing:DailySpendUITests/DailySpendUITests/testDebugDemoDataMakesDashboardAndInsightsTestable \
   -skip-testing:DailySpendUITests/DailySpendUITests/testHomeScanFillsANewExpenseForReview \
-  -skip-testing:DailySpendUITests/DailySpendUITests/testScannedReceiptFillsBothSplitModes
+  -skip-testing:DailySpendUITests/DailySpendUITests/testScannedReceiptFillsBothSplitModes \
+  -skip-testing:DailySpendUITests/DailySpendUITests/testScanLinkOpensTheScannerForReview \
+  -skip-testing:DailySpendUITests/DailySpendUITests/testQuickSplitScansRealReceipts \
+  -skip-testing:DailySpendUITests/DailySpendUITests/testWhatsNewOffersABackupAfterAnUpdate \
+  -skip-testing:DailySpendUITests/DailySpendUITests/testWhatsNewInChinese
 ```
 
 `ENABLE_TESTABILITY=YES` is a test-command override for unit tests' `@testable` import, not a shipping-build requirement. The skipped tests use Debug-only launch arguments: demo data, and a synthetic receipt in place of the camera.
 
 Automated checks cover exact-cent allocations, receipt export, backup validation/encryption, recurrence/data migration, widget snapshots/privacy, keyboard dismissal, navigation, and transaction-sheet presentation. They do not replace physical-device checks for camera permissions, authentication, notifications, signed iCloud sync, installed-widget appearances, or upgrading an existing TestFlight installation.
 
+- [2.0 manual test plan](docs/V2_MANUAL_TEST_PLAN.md) and [fictional test receipts with expected results](docs/test-receipts/README.md)
+- To try a development build on a phone that has the App Store app, run `scripts/device-test/install-on-device.sh <device-udid>`. It installs "DailySpend Test" beside it, with its own empty data and no iCloud.
 - [Owner test plan, edge cases, and expected results](docs/PRE_UPLOAD_TEST_PLAN.md)
 - [App Store release checklist](docs/APP_STORE_RELEASE_CHECKLIST.md)
 - [Current TestFlight tester notes](docs/TESTFLIGHT_NOTES.md)
-- [Tester data and App Store rollout workflow](docs/TESTER_DATA_WORKFLOW.md)
+- [Tester data and App Store rollout workflow](docs/TESTER_DATA_WORKFLOW.md), including the 2.0 TestFlight messages
+- [2.0 marketing kit](docs/marketing/V2_MARKETING.md)
 
 ## Project guide
 

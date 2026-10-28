@@ -57,3 +57,15 @@ nonisolated struct WidgetSnapshot: Codable, Equatable, Sendable {
         return true
     }
 }
+
+/// Links into the app from widgets and controls. The "DailySpend Test" build
+/// has its own scheme, so testing it never opens the App Store app.
+enum DailySpendLink {
+    static var scheme: String {
+        (Bundle.main.bundleIdentifier ?? "").contains(".devicetest") ? "dailyspendtest" : "dailyspend"
+    }
+
+    static func url(_ host: String) -> URL {
+        URL(string: "\(scheme)://\(host)")!
+    }
+}

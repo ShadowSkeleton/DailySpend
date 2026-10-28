@@ -55,6 +55,7 @@ struct SettingsView: View {
     }
 
     @State private var backupExportPurpose = BackupExportPurpose.standard
+    @State private var showWhatsNew = false
 
     private var appLockBinding: Binding<Bool> {
         Binding(
@@ -283,6 +284,17 @@ struct SettingsView: View {
 
             // MARK: - About
             Section {
+                Button { showWhatsNew = true } label: {
+                    Label {
+                        Text(L10n.isZh ? "DailySpend 2.0 新功能" : "What’s New in DailySpend 2.0")
+                            .foregroundStyle(.primary)
+                    } icon: {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(themeColor)
+                    }
+                }
+                .accessibilityIdentifier("whats-new-replay")
+
                 NavigationLink {
                     AboutView(themeColor: themeColor)
                 } label: {
@@ -303,12 +315,7 @@ struct SettingsView: View {
         }
         .navigationTitle(L10n.settings)
         .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .navigationBar)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                KeyboardDismissButton { isInputFocused = false }
-            }
-        }
+        .keyboardDismissInNavigationBar()
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: isInputFocused) { wasFocused, isFocused in
             if wasFocused && !isFocused { normalizeBudgetSettings() }
@@ -323,6 +330,9 @@ struct SettingsView: View {
             checkiCloudStatus()
         }
         .sheet(isPresented: $showCategoryBudgetSheet) { CategoryBudgetSettingView(themeColor: themeColor) }
+        .fullScreenCover(isPresented: $showWhatsNew) {
+            WhatsNewTour(kind: .replay, themeColor: themeColor) { showWhatsNew = false }
+        }
         .fileExporter(isPresented: $showFileExporter, document: jsonDocument, contentType: .json, defaultFilename: backupFilename) { result in
             handleBackupExport(result)
         }
@@ -402,6 +412,14 @@ struct SettingsView: View {
             iCloudStatusText = L10n.isZh
                 ? "自动化测试中未连接 iCloud"
                 : "iCloud is unavailable in UI tests"
+            iCloudIconColor = .gray
+            return
+        }
+
+        if !DailySpendApp.usesCloudKit {
+            iCloudStatusText = L10n.isZh
+                ? "测试版本未启用 iCloud，数据只保存在本机"
+                : "iCloud is off in this test build; data stays on this device"
             iCloudIconColor = .gray
             return
         }
@@ -556,31 +574,8 @@ struct SettingsView: View {
     }
 
     private func makeBackupData() throws -> Data {
-        let fetchDescriptor = FetchDescriptor<Expense>(sortBy: [SortDescriptor(\.date, order: .reverse)])
-        let expenses = try modelContext.fetch(fetchDescriptor)
-        let budgets = try modelContext.fetch(FetchDescriptor<CategoryBudget>())
-        let items = expenses.map {
-            ExpenseBackupItem(
-                id: $0.id,
-                amount: $0.normalizedAmount,
-                amountMinorUnits: $0.money.minorUnits,
-                category: $0.category,
-                note: $0.note,
-                date: $0.date,
-                frequency: $0.safeFrequency,
-                lastProcessedDate: $0.lastProcessedDate,
-                isRecurringChild: $0.isRecurringChild
-            )
-        }
-        let backup = AppBackup(
-            expenses: items,
-            categoryBudgets: budgets.map {
-                CategoryBudgetBackupItem(
-                    category: $0.category,
-                    amount: $0.normalizedAmount,
-                    amountMinorUnits: $0.money.minorUnits
-                )
-            },
+        try AppBackup.data(
+            from: modelContext,
             settings: BackupSettings(
                 isBudgetEnabled: isBudgetEnabled,
                 budgetAmount: budgetAmount,
@@ -589,12 +584,6 @@ struct SettingsView: View {
                 notifyTime: notifyTime
             )
         )
-        let encoder = JSONEncoder()
-        // V2 uses an absolute ISO 8601 timestamp so changing time zones
-        // between export and restore cannot move an expense to another day.
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = .prettyPrinted
-        return try encoder.encode(backup)
     }
 
     private func backupFilename(prefix: String) -> String {
@@ -707,7 +696,7 @@ struct SettingsView: View {
     }
 }
 
-private struct BackupPassphraseSheet: View {
+struct BackupPassphraseSheet: View {
     let title: String
     let message: String
     let requiresConfirmation: Bool
@@ -982,14 +971,13 @@ struct CategoryBudgetSettingView: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
+                // Done also ends typing, so the last value is kept.
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.done) { dismiss() }.fontWeight(.bold).tint(themeColor)
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    KeyboardDismissButton {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    Button(L10n.done) {
+                        UIApplication.dismissKeyboard()
+                        dismiss()
                     }
+                    .fontWeight(.bold).tint(themeColor)
                 }
             }
         }

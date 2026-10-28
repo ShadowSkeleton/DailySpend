@@ -1,19 +1,36 @@
 # DailySpend — TestFlight notes
 
-## Version 2.0 draft — not yet uploaded
+## Version 2.0 (16) — not yet uploaded
 
-Draft "What to Test" for 2.0 (15). Finalize it after the release quality and data-safety reviews and confirm the uploaded build number in App Store Connect.
+Paste after the release quality and data-safety reviews, and confirm the uploaded build number in App Store Connect. Tester backup messages and the Beta App Description are in `docs/TESTER_DATA_WORKFLOW.md` → "Version 2.0 TestFlight cycle".
 
-> DailySpend 2.0 reads receipts with Apple Intelligence, entirely on your device.
+> **Back up before installing:** Settings → Data Management → Create Encrypted Backup, saved outside the app. Install over your current app; never delete it.
 >
-> - Tap the scan button on Home (next to +) and scan a receipt or choose a photo. Check the amount, store, date, and category before saving.
-> - In Split Bill, scan into Quick Split (total and tip) or By Item (every line, tax, and tip). Tap names on each item to choose who shared it.
-> - By Item now uses one item list: one name on an item makes it personal.
-> - New "None" tip option; Custom now covers both a percentage and a fixed amount.
+> DailySpend 2.0 does a lot more on your device. A short tour shows each new feature the first time you open it (Settings → What's New shows it again).
 >
-> Please try receipts in different languages and layouts: long grocery receipts, restaurant bills with tips or service charges, discounts and coupons, and photos taken at an angle. Tell us when a total, item, or category is wrong (hide personal details in screenshots).
+> - **Scan a receipt:** tap the scan button on Home, next to +. Check the amount, store, date, and category before saving.
+> - **Split from a receipt:** in Split Bill, scan into Quick Split (total and tip) or By Item (every line, tax, and tip), and tap names on each item.
+> - **Quick Add:** tap + and type "Lunch with Alex 25" or "Uber 18 yesterday".
+> - **Siri and Controls:** "Log an expense in DailySpend", "Scan a receipt with DailySpend", "How much have I spent this month in DailySpend". Add the Scan Receipt or Add Expense control to Control Center, the Lock Screen, or the Action button.
+> - **Insights:** a quick look at this month against the same days last month, with Details for the numbers.
 >
-> Scanning items needs Apple Intelligence (iOS 26 or later on a supported device, turned on in Settings). Other devices still read the total. Upgrade over your current build without deleting the app, and keep a current encrypted backup.
+> Please try receipts in different languages and layouts, Quick Add sentences in your own words, and Insights early and late in a month. Tell us when a total, item, category, or summary is wrong, and hide personal details in screenshots.
+>
+> Scanning items and some summaries need Apple Intelligence (iOS 26 or later on a supported device, turned on in Settings). Other devices still read the total and use everything else.
+
+> **安装前请先备份：**“设置”→“数据管理”→“创建加密备份”，并把文件保存到 App 之外。直接覆盖安装，不要删除原 App。
+>
+> DailySpend 2.0 在你的设备上能做更多事。第一次打开时会有简短介绍（之后可在“设置”→“DailySpend 2.0 新功能”再次查看）。
+>
+> - **扫描收据：**点首页 + 旁边的扫描按钮，保存前确认金额、商家、日期和分类。
+> - **用收据分账：**在“分账”里扫描到“快速分账”（总额和小费）或“按项分账”（每一项、税和小费），在每一项上点选分摊的人。
+> - **一句话记账：**点 +，输入“和 Alex 吃午饭 25”或“昨天打车 23 块”。
+> - **Siri 和控制：**“在DailySpend里记一笔”“用DailySpend扫描收据”“我这个月在DailySpend花了多少”。可以把“扫描收据”或“记一笔”加到控制中心、锁定屏幕或操作按钮。
+> - **统计速览：**本月与上月同期对比，点“详情”查看具体数字。
+>
+> 欢迎用不同语言和格式的收据、你自己的说法来试一句话记账，并在月初和月末看看统计速览。发现总额、项目、分类或总结有误时请告诉我们，截图时请遮挡个人信息。
+>
+> 按项扫描和部分总结需要 Apple 智能（iOS 26 或更高版本、受支持的设备，并在“设置”中开启）。其他设备仍可识别总额，其他功能照常使用。
 
 ---
 

@@ -3,17 +3,39 @@ import UIKit
 
 // MARK: - Tip
 
-/// The tip control shared by both split modes. "Custom" holds both a custom
-/// percentage and a fixed amount, which keeps the choices on two short rows.
+/// The tip control shared by both split modes. When a scanned receipt prints
+/// a tip guide, its own choices and amounts replace the usual percentages,
+/// like the tip screen on a card reader. "Custom" holds both a custom
+/// percentage and a fixed amount. Where tipping isn't customary the choices
+/// stay folded behind "Add Tip", one tap away when traveling.
 struct TipSelector: View {
     @Binding var selection: Int
     @Binding var customPercentage: Int?
     @Binding var fixedAmount: Double?
     let tipAmount: Double
     let themeColor: Color
+    /// How percentages are figured, when the bill's tax or tip guide is known.
+    var calculator: TipCalculator? = nil
+    var tippingIsCustomary = TipPreset.isCustomary
+
+    @State private var isUnfolded = false
+
+    private var percentages: [Int] { calculator?.percentages ?? TipPreset.percentages }
 
     private var isCustom: Bool {
         selection == TipPreset.customPercentage || selection == TipPreset.fixedAmount
+    }
+
+    private var isUndecided: Bool { selection == TipPreset.undecided }
+
+    private var showsChoices: Bool {
+        tippingIsCustomary || isUnfolded || selection != TipPreset.none
+    }
+
+    private var usesReceiptGuide: Bool { !(calculator?.suggestions.isEmpty ?? true) }
+
+    private func currency(_ money: Money) -> String {
+        money.amount.formatted(.currency(code: L10n.currencyCode))
     }
 
     var body: some View {
@@ -22,10 +44,60 @@ struct TipSelector: View {
                 Label(L10n.isZh ? "小费" : "Tip", systemImage: "heart.circle.fill")
                     .font(.headline)
                 Spacer()
-                Text(tipAmount.formatted(.currency(code: L10n.currencyCode)))
+                if showsChoices {
+                    Text(isUndecided ? (L10n.isZh ? "待选择" : "Not chosen") : tipAmount.formatted(.currency(code: L10n.currencyCode)))
+                        .foregroundStyle(isUndecided ? Color.secondary : themeColor)
+                        .fontWeight(.bold)
+                        .contentTransition(.numericText())
+                } else {
+                    Button {
+                        isUnfolded = true
+                    } label: {
+                        Label(L10n.isZh ? "添加小费" : "Add Tip", systemImage: "plus")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .foregroundStyle(themeColor)
+                            .background(themeColor.opacity(0.12), in: Capsule())
+                    }
+                    .accessibilityIdentifier("tip-add")
+                }
+            }
+
+            if showsChoices {
+                choices
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.snappy, value: showsChoices)
+        .animation(.snappy, value: isCustom)
+        .animation(.snappy, value: isUndecided)
+        .animation(.snappy, value: percentages)
+        .onAppear(perform: keepSelectionVisible)
+        .onChange(of: percentages) { _, _ in keepSelectionVisible() }
+    }
+
+    /// A percentage that is no longer offered, such as the receipt's 22%
+    /// after its items are edited, stays chosen as a custom percentage.
+    private func keepSelectionVisible() {
+        guard selection > 0, !percentages.contains(selection) else { return }
+        customPercentage = selection
+        selection = TipPreset.customPercentage
+    }
+
+    @ViewBuilder
+    private var choices: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if isUndecided {
+                Label(L10n.isZh ? "收据上还没有小费。选择一项，算进每个人的金额。"
+                                : "This bill leaves the tip to you. Choose one to include it in everyone’s share.",
+                      systemImage: "hand.tap.fill")
+                    .font(.footnote)
                     .foregroundStyle(themeColor)
-                    .fontWeight(.bold)
-                    .contentTransition(.numericText())
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(themeColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityIdentifier("tip-undecided-hint")
             }
 
             LazyVGrid(
@@ -36,8 +108,10 @@ struct TipSelector: View {
                     selection = TipPreset.none
                 }
                 .accessibilityIdentifier("tip-none")
-                ForEach(TipPreset.percentages, id: \.self) { percentage in
-                    TipOptionButton(text: "\(percentage)%", isSelected: selection == percentage, color: themeColor) {
+                ForEach(percentages, id: \.self) { percentage in
+                    TipOptionButton(text: "\(percentage)%",
+                                    detail: usesReceiptGuide ? calculator?.printedTip(percent: percentage).map(currency) : nil,
+                                    isSelected: selection == percentage, color: themeColor) {
                         selection = percentage
                     }
                 }
@@ -85,8 +159,27 @@ struct TipSelector: View {
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
+
+            if let note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("tip-basis-note")
+            }
         }
-        .animation(.snappy, value: isCustom)
+    }
+
+    /// One quiet line saying where the tip choices come from. Nothing to decide.
+    private var note: String? {
+        guard let calculator else { return nil }
+        if usesReceiptGuide {
+            return L10n.isZh ? "来自收据上的小费建议" : "From the receipt’s tip guide"
+        }
+        let isPercentage = selection > 0 || selection == TipPreset.customPercentage
+        guard isPercentage, calculator.hasSeparateTax else { return nil }
+        return calculator.basis == .beforeTax
+            ? (L10n.isZh ? "按税前 \(currency(calculator.base)) 计算" : "Figured on \(currency(calculator.base)) before tax")
+            : (L10n.isZh ? "按税后 \(currency(calculator.base)) 计算，与收据一致" : "Figured on \(currency(calculator.base)) after tax, like this receipt")
     }
 }
 
@@ -94,21 +187,33 @@ struct TipSelector: View {
 // collapsing into circles.
 struct TipOptionButton: View {
     let text: String
+    /// A second line, such as the tip amount a receipt printed for this choice.
+    var detail: String? = nil
     let isSelected: Bool
     let color: Color
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Text(text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            VStack(spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
 
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.caption.weight(.bold))
-                        .accessibilityHidden(true)
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.caption.weight(.bold))
+                            .accessibilityHidden(true)
+                    }
+                }
+                if let detail {
+                    Text(detail)
+                        .font(.caption.weight(.medium))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .opacity(isSelected ? 0.9 : 0.6)
                 }
             }
             .font(.subheadline.weight(.semibold))
@@ -123,7 +228,7 @@ struct TipOptionButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityLabel(text)
+        .accessibilityLabel(detail.map { "\(text), \($0)" } ?? text)
         .accessibilityValue(isSelected ? (L10n.isZh ? "已选择" : "Selected") : (L10n.isZh ? "未选择" : "Not selected"))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .animation(.snappy, value: isSelected)
@@ -220,10 +325,14 @@ struct PersonToggleChip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .foregroundStyle(isSelected ? Color.white : Color.secondary)
-            .background(isSelected ? themeColor : Color(uiColor: .tertiarySystemFill), in: Capsule())
+            .background(isSelected ? themeColor : Color.clear, in: Capsule())
+            .overlay(Capsule().strokeBorder(isSelected ? Color.clear : Color(uiColor: .separator), lineWidth: 1))
+            .contentShape(Capsule())
+            .animation(.snappy(duration: 0.2), value: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
+        .accessibilityIdentifier("share-chip-\(title)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

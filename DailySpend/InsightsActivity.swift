@@ -277,16 +277,17 @@ struct DayDetailView: View {
                                 VStack(alignment: .leading) {
                                     Text(L10n.categoryName(expense.category)).font(.subheadline).bold()
                                     if !expense.note.isEmpty {
-                                        Text(expense.note)
+                                        Text(expense.notePreview)
+                                            .lineLimit(1)
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                            .lineLimit(1)
                                     }
                                 }
                                 Spacer()
                                 Text(expense.normalizedAmount.formatted(.currency(code: L10n.currencyCode)))
                                     .font(.subheadline)
                                     .bold()
+                                    .fixedSize()
                             }
                             .padding(12)
                             .background(RoundedRectangle(cornerRadius: 12).fill(cardBackground).shadow(color: .black.opacity(0.02), radius: 4))

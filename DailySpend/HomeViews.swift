@@ -6,6 +6,7 @@ struct HomeView: View {
     let themeColor: Color
     var onOpenSplitBill: () -> Void = { }
     @Binding var pendingQuickAdd: Bool
+    @Binding var pendingScan: Bool
     var canOpenQuickAdd: Bool
     let backgroundColor = Color(uiColor: .systemGroupedBackground)
     
@@ -135,9 +136,9 @@ struct HomeView: View {
             .sheet(item: $expenseSheet, onDismiss: openPendingQuickAdd) { sheet in
                 switch sheet {
                 case .add:
-                    AddExpenseView(themeColor: themeColor)
+                    AddExpenseView(themeColor: themeColor, onSaved: showMonth)
                 case .review(let draft):
-                    AddExpenseView(themeColor: themeColor, prefilledDraft: draft)
+                    AddExpenseView(themeColor: themeColor, prefilledDraft: draft, onSaved: showMonth)
                 case .edit(let expense):
                     EditExpenseView(expense: expense, themeColor: themeColor)
                 }
@@ -161,9 +162,21 @@ struct HomeView: View {
                 expenseSheet = .review(draft)
             }
             openPendingQuickAdd()
+            openPendingScan()
         }
         .onChange(of: pendingQuickAdd) { _, _ in openPendingQuickAdd() }
-        .onChange(of: canOpenQuickAdd) { _, _ in openPendingQuickAdd() }
+        .onChange(of: pendingScan) { _, _ in openPendingScan() }
+        .onChange(of: canOpenQuickAdd) { _, _ in
+            openPendingQuickAdd()
+            openPendingScan()
+        }
+    }
+
+    /// An expense dated in another month, such as an old receipt, would
+    /// otherwise save out of sight. Showing its month confirms the save.
+    private func showMonth(of date: Date) {
+        guard !Calendar.current.isDate(date, equalTo: homeSelectedMonth, toGranularity: .month) else { return }
+        withAnimation(.snappy) { homeSelectedMonth = date }
     }
 
     private func openPendingQuickAdd() {
@@ -180,6 +193,14 @@ struct HomeView: View {
         pendingQuickAdd = false
     }
     
+    /// Starts a scan asked for from Siri or Control Center, once Home is
+    /// showing, unlocked, and not already presenting something.
+    private func openPendingScan() {
+        guard pendingScan, canOpenQuickAdd, expenseSheet == nil else { return }
+        pendingScan = false
+        scanner.start(ReceiptScannerView.isSupported ? .camera : .photos)
+    }
+
     var filteredExpenses: [Expense] {
         let calendar = Calendar.current
         return expenses.filter { calendar.isDate($0.date, equalTo: homeSelectedMonth, toGranularity: .month) }

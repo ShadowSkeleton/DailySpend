@@ -14,6 +14,46 @@ struct KeyboardDismissButton: View {
         .accessibilityIdentifier("keyboard-dismiss")
     }
 }
+
+/// Tracks whether the keyboard is on screen, for screens that put the
+/// hide-keyboard button in the navigation bar.
+struct KeyboardVisibilityReader: ViewModifier {
+    @Binding var isVisible: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                isVisible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                isVisible = false
+            }
+    }
+}
+
+/// Shows the hide-keyboard button in the navigation bar while the keyboard
+/// is up, as New Expense does, instead of a bar floating over the keyboard.
+struct KeyboardDismissToolbar: ViewModifier {
+    @State private var isKeyboardVisible = false
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                if isKeyboardVisible {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        KeyboardDismissButton { UIApplication.dismissKeyboard() }
+                    }
+                }
+            }
+            .modifier(KeyboardVisibilityReader(isVisible: $isKeyboardVisible))
+    }
+}
+
+extension View {
+    func keyboardDismissInNavigationBar() -> some View {
+        modifier(KeyboardDismissToolbar())
+    }
+}
 import WidgetKit
 import UserNotifications
 

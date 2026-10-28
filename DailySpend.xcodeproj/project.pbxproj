@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		4E2026090400000000000001 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2026090400000000000002 /* WidgetSnapshot.swift */; };
+		4E2026102600000000000001 /* OpenDailySpendIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2026102600000000000002 /* OpenDailySpendIntent.swift */; };
 		4EE9D1D92EE3925F009C1BE8 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4EE9D1D82EE3925F009C1BE8 /* WidgetKit.framework */; };
 		4EE9D1DB2EE3925F009C1BE8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4EE9D1DA2EE3925F009C1BE8 /* SwiftUI.framework */; };
 		4EE9D1EA2EE39260009C1BE8 /* DailySpendWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4EE9D1D62EE3925F009C1BE8 /* DailySpendWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -53,6 +54,7 @@
 
 /* Begin PBXFileReference section */
 		4E2026090400000000000002 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySpend/WidgetSnapshot.swift; sourceTree = SOURCE_ROOT; };
+		4E2026102600000000000002 /* OpenDailySpendIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySpend/OpenDailySpendIntent.swift; sourceTree = SOURCE_ROOT; };
 		4E0000012FF0000100C0D001 /* DailySpendTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DailySpendTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E0000112FF0000100C0D001 /* DailySpendUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DailySpendUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E9118B82EE29C0500B4AC63 /* DailySpend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DailySpend.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -146,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				4E2026090400000000000002 /* WidgetSnapshot.swift */,
+				4E2026102600000000000002 /* OpenDailySpendIntent.swift */,
 				4ECD1A802EE7ABCA0003A2A6 /* DailySpendWidgetExtension.entitlements */,
 				4E9118BA2EE29C0500B4AC63 /* DailySpend */,
 				4EE9D1DC2EE3925F009C1BE8 /* DailySpendWidget */,
@@ -362,6 +365,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4E2026090400000000000001 /* WidgetSnapshot.swift in Sources */,
+				4E2026102600000000000001 /* OpenDailySpendIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -570,7 +574,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = DailySpend/DailySpend.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -605,7 +609,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = DailySpend/DailySpend.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -640,7 +644,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DailySpendWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DailySpendWidget/Info.plist;
@@ -671,7 +675,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = DailySpendWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = X7DADA8TN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DailySpendWidget/Info.plist;

@@ -13,7 +13,9 @@ nonisolated enum ReceiptAmountParser {
         let boundingBox: CGRect
     }
 
-    private static let centsPattern = #"(?:[$€£¥]\s*)?((?:\d{1,3}(?:,\d{3})*|\d+)\.\d{2})(?!\d)"#
+    /// Two decimal places after a point or a comma, so "12.50", "1,224.50",
+    /// "12,00 €", and "1.234,56" all count as prices.
+    private static let centsPattern = #"(?:[$€£¥]\s*)?((?:\d{1,3}(?:[,.]\d{3})+|\d+)[.,]\d{2})(?!\d)"#
     static func bestAmount(from lines: [Line]) -> Double? {
         let candidates = lines.compactMap { line -> (line: Line, amount: Double, priority: Int)? in
             guard let amount = currencyAmount(in: line.text) else { return nil }
@@ -76,7 +78,7 @@ nonisolated enum ReceiptAmountParser {
             return nil
         }
 
-        return Double(text[amountRange].replacingOccurrences(of: ",", with: ""))
+        return ReceiptNumberParser.money(from: String(text[amountRange]))?.amount
     }
 
     private static func labelPriority(for text: String) -> Int {

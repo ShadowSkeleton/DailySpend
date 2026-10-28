@@ -15,6 +15,10 @@ DEBUG_ONLY_UI_TESTS = (
     "testDebugDemoDataMakesDashboardAndInsightsTestable",
     "testHomeScanFillsANewExpenseForReview",
     "testScannedReceiptFillsBothSplitModes",
+    "testScanLinkOpensTheScannerForReview",
+    "testQuickSplitScansRealReceipts",
+    "testWhatsNewOffersABackupAfterAnUpdate",
+    "testWhatsNewInChinese",
 )
 
 
