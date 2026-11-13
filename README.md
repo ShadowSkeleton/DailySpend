@@ -1,83 +1,64 @@
+<div align="center">
+
+<img src="DailySpend/Assets.xcassets/AppIcon.appiconset/logo.png" alt="DailySpend app icon" width="112">
+
 # DailySpend
 
-<img src="DailySpend/Assets.xcassets/AppIcon.appiconset/logo.png" alt="DailySpend wallet icon" width="120">
+**Snap it. Say it. Split it. See it.**
 
-**Private spending. Fair splitting.**
+An expense tracker and bill splitter for iPhone and iPad that does the typing for you, entirely on your device.
 
-DailySpend is a native SwiftUI expense tracker and bill-splitting app for iPhone and iPad. Track purchases, follow budgets, calculate each person's share, and export a clear receipt. It calculates amounts owed; it does not transfer money or connect to bank accounts.
+[![Download on the App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/us/app/dailyspend-spend-split/id6756170183)
+&nbsp;
+[![CI](https://github.com/ShadowSkeleton/DailySpend/actions/workflows/ci.yml/badge.svg)](https://github.com/ShadowSkeleton/DailySpend/actions/workflows/ci.yml)
+![iOS 17+](https://img.shields.io/badge/iOS-17%2B-black?logo=apple)
+![Swift](https://img.shields.io/badge/Swift-SwiftUI%20%2B%20SwiftData-F05138?logo=swift&logoColor=white)
+![No tracking](https://img.shields.io/badge/privacy-no%20account%20·%20no%20ads%20·%20no%20tracking-2BB5A3)
 
-## Current status
+<img src="docs/images/readme/header.jpg" alt="DailySpend 2.0: scan receipts, split by item, log in plain words, see your month" width="100%">
 
-**Version 2.0 (16) — release candidate, not uploaded.** Version 2.0 adds on-device receipt reading, Quick Add, Siri and Control Center actions, and an Insights summary. Its [quality report](docs/releases/2.0-16-QUALITY.md) and [data-safety report](docs/releases/2.0-16-DATA_SAFETY.md) clear it for upload and a restricted TestFlight test. Broad release is held only until the owner's passing device checks (October 28, 2026) are tied to the uploaded build. This is not an announcement of App Store availability. Confirm actual uploaded builds in App Store Connect.
+</div>
 
-Version 2.0 adds:
+## What's new in 2.0
 
-- **Smart receipt scanning:** scan with the camera or pick a photo. On devices with Apple Intelligence, Apple's on-device model reads the store, date, items, tax, tip, and total; DailySpend checks the arithmetic itself and fills a New Expense form to review. A scan button on Home goes straight from receipt to review. Other devices still read the total, as before.
-- **Scan into a split:** Quick Split takes the bill total and any charged tip. By Item takes every line, tax, and tip; "2 × Dumplings" becomes two lines so different people can take each.
-- **Simpler By Item:** one item list instead of separate personal and shared sections. Tap names on an item to choose who shares it; one name makes it personal. People added later join items shared by everyone.
-- **Quick Add in plain words:** type "Lunch with Alex 25" or "昨天打车 23 块" at the top of New Expense and the amount, category, date, and any split fill in.
-- **Siri, Shortcuts, and Controls:** log an expense, scan a receipt, or ask what you've spent this month; Scan Receipt and Add Expense controls for Control Center, the Lock Screen, and the Action button.
-- **Insights quick look:** this month against the same days last month in one sentence, with Details for the exact numbers.
-- **One-time 2.0 tour:** after the update, a short tour shows each new feature. People with existing data start on a page with their expense count and a Back Up Now button; new users get a welcome page. Settings → What's New shows it again.
-- **Polish:** a "None" tip option and a combined Custom tip (% or fixed), the currency symbol beside the amount when adding an expense, a reset icon instead of a red trash can for starting a new split, the Monthly Change comparison window shown on the card, a trend line that no longer overshoots between days, currency symbols on budget settings, and Chinese text for strings that were English-only.
-- **Smarter reading details:** tilted photos are straightened so prices stay with their items; Chinese receipts are read with automatic language detection (1.0 read them as garbled Latin text when English came first); all-capital names are shown in title case; store and pharmacy receipts get no default restaurant tip, so the split matches what was paid.
-- **Fixes:** opening Category Limits no longer rounds a saved limit with cents (for example $180.50) to a whole number, and the "Add your first expense" button shows its plus icon again.
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/images/readme/01-scan-receipt.jpg" alt="Scanning a receipt fills in a new expense" width="230"><br><b>Snap a receipt</b><br><sub>Store, date, items, tax, tip, and total, read on the device. You check, then save.</sub></td>
+    <td align="center" width="33%"><img src="docs/images/readme/02-split-by-item.jpg" alt="Splitting a receipt by item" width="230"><br><b>Split by item</b><br><sub>Tap who shared each dish. Tax and tip are divided to the cent.</sub></td>
+    <td align="center" width="33%"><img src="docs/images/readme/03-quick-add.jpg" alt="Quick Add fills an expense from a sentence" width="230"><br><b>Say it in plain words</b><br><sub>"Lunch with Alex 25" or "昨天打车 23 块" becomes a ready-to-save expense.</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/readme/04-insights.jpg" alt="Insights compares this month with last month" width="230"><br><b>See your month</b><br><sub>This month against the same days last month, in one sentence.</sub></td>
+    <td align="center"><img src="docs/images/readme/05-budget.jpg" alt="Budgets and category limits" width="230"><br><b>Budgets you can see</b><br><sub>Monthly and category limits with gentle reminders.</sub></td>
+    <td align="center"><img src="docs/images/readme/07-privacy.jpg" alt="Privacy and encrypted backups" width="230"><br><b>Yours alone</b><br><sub>No account, no ads. Optional iCloud sync and encrypted backups.</sub></td>
+  </tr>
+</table>
 
-No stored data format changed: expenses, budgets, backups, and iCloud records use the same fields as 1.0. Receipt images and text are never stored or sent anywhere.
-
-The September 2026 (1.0) update included:
-
-- **New wallet branding:** a mint/teal wallet icon replaces the old heart branding, with matching artwork in Settings and the refreshed About page.
-- **More dependable editing:** full-card transaction tap targets and coordinated Add/Edit presentation. Widget Quick Add waits for an existing edit to finish.
-- **Clearer transaction rows:** red destructive swipe actions, multiline notes, and natural recurring labels instead of appended “(Auto)” text.
-- **Better split receipts:** shared subtotals expand into individual items with each person's allocated amount and actual participant names. Long names wrap; a bitmap export path avoids blank tall receipts.
-- **Polished amount entry:** the currency symbol sits beside the bill amount, numeric keyboards have a dismiss action, and decimal-comma input retains cents.
-- **Widget and privacy refinements:** exact-cent snapshots, explicit empty/stale states, improved navigation, and hidden balances when App Lock is enabled and the widget refreshes.
-- **Safer data handling:** validated backup imports, replacement-restore safeguards, CSV formula protection, and rollback of unsuccessful recurring-entry saves.
+Also new: **Siri, Shortcuts, and Controls** (log an expense, scan a receipt, or ask what you've spent; Control Center, Lock Screen, and Action button), and a one-time tour of the new features. Full notes are in the [changelog](CHANGELOG.md).
 
 ## Features
 
-### Track spending
+**Track spending.** Add, edit, and categorize expenses with dates, notes, and daily, weekly, monthly, or yearly repeats. Charts, category breakdowns, and activity history. Overall and per-category budgets with optional reminders.
 
-Add, edit, and categorize expenses with dates and notes. Set daily, weekly, monthly, or yearly recurring entries. Review monthly spending, category breakdowns, charts, and activity history. Set overall and category budgets, with optional local reminders.
+**Scan receipts.** Use the camera or a photo. With Apple Intelligence (iOS 26 or later on a supported device), Apple's on-device model organizes the receipt and DailySpend checks every amount against the printed text and totals. Without it, DailySpend reads the total. Every scan fills a form to **review**; nothing is saved until you do. If something looks off, scanning the whole receipt again usually fixes it.
 
-Receipt scanning reads a camera capture or a photo on the device. With Apple Intelligence (iOS 26 or later on a supported device), the on-device model fills the store, date, items, tax, tip, and category; without it, DailySpend suggests the total. Every scan fills a form for you to **review** before anything is saved; reading is not guaranteed to be correct, and DailySpend flags totals that don't add up.
+**Split fairly.** Divide a total evenly, or list items and tap who shared each one. Tax and percentage or fixed tips are included, and rounding cents are allocated so every share adds up to the bill. Export a per-person receipt and record your own share as an expense. DailySpend calculates who owes what; it never moves money or connects to a bank.
 
-### Split fairly
+**Widgets.** Quick Add opens a new expense. Small and medium dashboard widgets show spending and budget status.
 
-- Divide a total evenly or list items and tap who shared each one.
-- Scan a receipt to fill the total (Quick Split) or every item, tax, and tip (By Item).
-- Include tax and percentage or fixed tips.
-- Allocate rounding differences in cents so final shares reconcile with the bill.
-- Export a per-person receipt and optionally record your own share as an expense.
+**Privacy.** No sign-up, ads, subscriptions, in-app purchases, analytics, or tracking. Expenses stay on the device, with private iCloud sync if you turn it on. Optional App Lock with Face ID or passcode. Passphrase-encrypted backups (CryptoKit); the passphrase is never stored. Receipt images and text are never kept or sent anywhere.
 
-A person's shared-item prices are **their allocated shares**, not full item prices. For example, $3 + $4 gives that person's $7 shared subtotal. Participant names identify who shared each item.
+Read the [privacy policy](docs/privacy/index.html) and [support page](docs/support/index.html).
 
-Unrecorded split calculations are temporary, not a persistent group-debt ledger.
-
-### Widgets
-
-Quick Add opens a new expense. Small and medium dashboard widgets show spending and budget information. iOS controls refresh timing, so saved changes may not appear immediately. Old snapshots can prompt you to open the app for a refresh.
-
-### Privacy and portability
-
-- No app-account registration, ads, subscriptions, in-app purchases, third-party analytics, or tracking.
-- On-device expense storage, with private CloudKit sync when iCloud is available and enabled.
-- Optional App Lock using device authentication and hidden financial content in the app switcher.
-- Passphrase-encrypted JSON backups using Apple's CryptoKit and CommonCrypto. The passphrase is not stored or recoverable.
-- Validated restore, merge, and replacement with a required safety backup before replacement.
-- CSV exports are readable, **unencrypted**, and are not full backups. Earlier JSON backups may also be unencrypted.
-
-iCloud sync is not an independent backup history: deletions can sync too. After enabling App Lock, iOS may temporarily retain an old rendered widget; remove it if its contents must be hidden immediately.
-
-See the [privacy policy](docs/privacy/index.html) and [support page](docs/support/index.html).
+> **Good to know:** iCloud sync isn't a backup history, because deletions sync too. CSV exports are readable spreadsheets, not encrypted backups.
 
 ## Build and run
 
-- Deployment target: **iOS/iPadOS 17.0 or later**.
-- Validation toolchain: **Xcode 26.6** on macOS. Use a recent Xcode that supports the project's synchronized folders and Swift settings; the old Xcode 15 instructions no longer apply.
-- Frameworks: SwiftUI, SwiftData, CloudKit, Swift Charts, Vision/VisionKit, Foundation Models (iOS 26+, on-device only), PhotosUI, WidgetKit, UserNotifications, LocalAuthentication, CryptoKit, and CommonCrypto.
-- Build with the iOS 26 SDK or later (Xcode 26+); the deployment target stays iOS 17, and Apple Intelligence features turn on only where available.
+| | |
+|---|---|
+| Deployment target | iOS / iPadOS 17.0 |
+| Toolchain | Xcode 27.1 (CI also builds with Xcode 26.6) |
+| Frameworks | SwiftUI, SwiftData, CloudKit, Swift Charts, Vision, VisionKit, Foundation Models (on-device, iOS 26+), App Intents, WidgetKit, LocalAuthentication, CryptoKit |
 
 ```bash
 git clone https://github.com/ShadowSkeleton/DailySpend.git
@@ -85,11 +66,12 @@ cd DailySpend
 open DailySpend.xcodeproj
 ```
 
-Select the shared **DailySpend** scheme and an installed iPhone/iPad simulator, then run. For signed device builds, configure the appropriate development team and provisioning capabilities.
+Select the shared **DailySpend** scheme and a simulator, then run. Apple Intelligence features turn on only where the device supports them; everything else works back to iOS 17. For a signed device build, set your own development team.
 
-### Existing app identity
+<details>
+<summary><b>App identity (don't rename)</b></summary>
 
-The public brand is DailySpend. These legacy identifiers deliberately remain unchanged for the existing distributed app:
+The public name is DailySpend, but these identifiers stay as they are because they identify the shipped app, its storage, and its shared widget data:
 
 | Purpose | Identifier |
 |---|---|
@@ -98,27 +80,16 @@ The public brand is DailySpend. These legacy identifiers deliberately remain unc
 | App Group | `group.com.jackson.LoveLedger` |
 | Widget extension | `com.jackson.LoveLedger.LoveLedgerWidget` |
 
-Do not rename them as a branding cleanup. They identify the existing app, storage, and shared widget data. A separate developer's fork needs its own registered identifiers and signing configuration; it cannot use the original developer's private CloudKit container.
+A fork needs its own registered identifiers and signing; it can't use this app's private CloudKit container. For TestFlight builds against production iCloud, deploy the tested CloudKit schema to Production and verify sync on signed devices.
 
-For production-backed TestFlight testing, deploy the tested CloudKit schema to Production and verify sync on signed physical devices. Simulator tests do not prove production CloudKit access.
+</details>
 
-## Tests and release checks
+## Tests
 
-Latest development verification, **October 25, 2026** (2.0 work in progress, Xcode 27.1 on macOS 27.0.1, iPhone 17 simulators):
+Every pull request runs the full **Debug** and **Release** suites on GitHub's iPhone 17e simulator, with synthetic data, signing disabled, and no secrets. In Xcode, press **Command-U** for the Debug suite.
 
-| Runtime | Configuration | Result |
-|---|---|---|
-| iOS 27.0 | Debug | **81 passed** (66 unit/data, 15 UI), including the on-device Apple Intelligence receipt tests |
-| iOS 27.0 | Release | **78 passed**; the three Debug-only UI tests excluded |
-| iOS 26.5 | Debug | **80 passed, 1 skipped**: that simulator reports the model available but its safety model fails to load, so the model test skips and receipts fall back to reading the total |
-
-On the iOS 27.0 simulator, fictional receipt photos chosen from Photos were read end to end in the app (restaurant, grocery with coupon, pharmacy with unit prices, Chinese hotpot with service charge). Signed physical-device results on iOS 26 and 27, the camera path, and the iOS 17–25 fallback on a real older runtime are still needed before release.
-
-Earlier verification, September 10, 2026 (1.0 build 14): Release simulator build and 50 tests passed on iPhone 17e / iOS 26.5 with Xcode 26.6.
-
-The shared scheme includes `DailySpendTests` and `DailySpendUITests`. Choose a simulator and press **Command-U** in Xcode to run the default Debug suite.
-
-For Release testing, substitute an available simulator name:
+<details>
+<summary><b>Release test command</b></summary>
 
 ```bash
 xcodebuild test \
@@ -137,36 +108,43 @@ xcodebuild test \
   -skip-testing:DailySpendUITests/DailySpendUITests/testWhatsNewInChinese
 ```
 
-`ENABLE_TESTABILITY=YES` is a test-command override for unit tests' `@testable` import, not a shipping-build requirement. The skipped tests use Debug-only launch arguments: demo data, and a synthetic receipt in place of the camera.
+`ENABLE_TESTABILITY=YES` lets unit tests use `@testable import`; it isn't needed for shipping builds. The skipped tests rely on Debug-only launch arguments (demo data and a synthetic receipt in place of the camera).
 
-Automated checks cover exact-cent allocations, receipt export, backup validation/encryption, recurrence/data migration, widget snapshots/privacy, keyboard dismissal, navigation, and transaction-sheet presentation. They do not replace physical-device checks for camera permissions, authentication, notifications, signed iCloud sync, installed-widget appearances, or upgrading an existing TestFlight installation.
+</details>
 
-- [2.0 manual test plan](docs/V2_MANUAL_TEST_PLAN.md) and [fictional test receipts with expected results](docs/test-receipts/README.md)
-- To try a development build on a phone that has the App Store app, run `scripts/device-test/install-on-device.sh <device-udid>`. It installs "DailySpend Test" beside it, with its own empty data and no iCloud.
-- [Owner test plan, edge cases, and expected results](docs/PRE_UPLOAD_TEST_PLAN.md)
-- [App Store release checklist](docs/APP_STORE_RELEASE_CHECKLIST.md)
-- [Current TestFlight tester notes](docs/TESTFLIGHT_NOTES.md)
-- [Tester data and App Store rollout workflow](docs/TESTER_DATA_WORKFLOW.md), including the 2.0 TestFlight messages
-- [2.0 marketing kit](docs/marketing/V2_MARKETING.md)
-- [2.0 build, TestFlight, and App Store guide](docs/RELEASE_GUIDE_2.0.md)
+Automated checks cover exact-cent splits, receipt reading and its checks, backup encryption and validation, data migration, widget snapshots, and the main screens. Camera, Face ID, notifications, signed iCloud sync, and upgrading a real installation are checked on devices before each release; see [`docs/releases/`](docs/releases/).
 
 ## Project guide
-
-For everyday development, follow the [development workflow](docs/DEVELOPMENT_WORKFLOW.md) and [definition of done](docs/DEFINITION_OF_DONE.md). Pull requests use structured review templates and Debug/Release simulator CI with synthetic data, disabled signing, and no custom secrets. Hosted CI is limited to public repositories using standard free runners; release and migration safety checks remain separate.
 
 | Path | Purpose |
 |---|---|
 | `DailySpend/Expense.swift`, `Money.swift`, `MoneyStoreMigration.swift` | Expense model, exact-cent arithmetic, migration |
 | `DailySpend/HomeViews.swift`, `TransactionViews.swift` | Dashboard and entry/edit flows |
-| `DailySpend/ReceiptDraft.swift` | Receipt values, exact-cent parsing, and the checks applied to model output |
-| `DailySpend/ReceiptIntelligence.swift`, `ReceiptScanFlow.swift` | Vision text recognition, the on-device model, and the shared scan UI |
-| `DailySpend/SplitBillLogic.swift`, `SplitBillView.swift`, `SplitBillComponents.swift` | Split calculations, receipt export, and shared split controls |
+| `DailySpend/ReceiptDraft.swift` | Receipt values and the checks applied to model output |
+| `DailySpend/ReceiptIntelligence.swift`, `ReceiptScanFlow.swift` | Text recognition, the on-device model, and the scan UI |
+| `DailySpend/SplitBillLogic.swift`, `SplitBillView.swift`, `SplitBillComponents.swift` | Split calculations, receipt export, split controls |
 | `DailySpend/SettingsView.swift`, `SecureBackupCodec.swift` | Settings, About, backup and restore |
-| `DailySpend/SceneProtectionWindow.swift` | Scene-level privacy protection |
 | `DailySpend/WidgetSnapshot.swift`, `DailySpendWidget/` | Shared widget data and UI |
-| `DailySpendTests/`, `DailySpendUITests/` | Automated regression checks |
-| `docs/` | Public support/privacy pages and release documentation |
+| `DailySpendTests/`, `DailySpendUITests/` | Automated tests |
+| `docs/` | Support and privacy pages, release reports, and guides |
 
-Local QA captures, personal Xcode settings, build products, and the separate App Store marketing kit are not included in this repository.
+Contributing: follow the [development workflow](docs/DEVELOPMENT_WORKFLOW.md) and [definition of done](docs/DEFINITION_OF_DONE.md).
 
-Created by **Jackson Feng**. Support: **jacksonfeng0130@yahoo.com**.
+<details>
+<summary><b>Release and testing docs</b></summary>
+
+- [2.0 build, TestFlight, and App Store guide](docs/RELEASE_GUIDE_2.0.md)
+- [Release reports](docs/releases/) (quality and data safety, per build)
+- [TestFlight notes](docs/TESTFLIGHT_NOTES.md) and [tester data workflow](docs/TESTER_DATA_WORKFLOW.md)
+- [2.0 manual test plan](docs/V2_MANUAL_TEST_PLAN.md) and [fictional test receipts](docs/test-receipts/README.md)
+- [Owner test plan](docs/PRE_UPLOAD_TEST_PLAN.md) and [App Store release checklist](docs/APP_STORE_RELEASE_CHECKLIST.md)
+- [2.0 marketing kit](docs/marketing/V2_MARKETING.md) and [storefront kit](docs/marketing/V2_STOREFRONT.md)
+- Try a development build beside the App Store app: `scripts/device-test/install-on-device.sh <device-udid>` installs "DailySpend Test" with its own empty data and no iCloud.
+
+</details>
+
+---
+
+<div align="center">
+<sub>Made by <b>Jackson Feng</b> · Support: jacksonfeng0130@yahoo.com</sub>
+</div>
