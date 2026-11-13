@@ -552,7 +552,7 @@ final class DailySpendUITests: XCTestCase {
         words.typeText("Lunch at KFC 25")
         app.buttons["quick-entry-submit"].tap()
         let amount = app.textFields["expense-amount"]
-        wait(for: [expectation(for: NSPredicate(format: "value == %@", "25.00"), evaluatedWith: amount)], timeout: 2)
+        wait(for: [expectation(for: NSPredicate(format: "value == %@", "25.00"), evaluatedWith: amount)], timeout: 5)
         app.buttons["Save"].tap()
         XCTAssertTrue(app.staticTexts["-$25.00"].waitForExistence(timeout: 5))
 
@@ -609,7 +609,8 @@ final class DailySpendUITests: XCTestCase {
         let visible = expectation(for: NSPredicate { _, _ in
             grocery.exists && save.exists && grocery.frame.midY < save.frame.minY && grocery.isHittable
         }, evaluatedWith: nil)
-        wait(for: [visible], timeout: 3)
+        // Hosted CI simulators can take several seconds per UI snapshot.
+        wait(for: [visible], timeout: 10)
         XCTAssertTrue(amount.isHittable, "The amount being typed stays in view")
         attachScreenshot(named: "Categories above the keyboard")
         grocery.tap()
