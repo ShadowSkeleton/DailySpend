@@ -30,6 +30,8 @@ struct AddExpenseView: View {
     @State private var hasAppeared = false
     @FocusState private var isInputActive: Bool
     @State private var quickText = ""
+    /// Typing an amount scrolls the categories into view once per sheet.
+    @State private var hasRevealedCategories = false
     @State private var appliedEntry: QuickEntry?
     @State private var isRefiningCategory = false
     @State private var categoryHelper = QuickEntryCategoryHelper()
@@ -51,23 +53,33 @@ struct AddExpenseView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 24) {
-                        if showsDraftBanner, let draft = appliedDraft {
-                            ReceiptDraftBanner(draft: draft, context: .expense, themeColor: themeColor) {
-                                withAnimation { showsDraftBanner = false }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            if showsDraftBanner, let draft = appliedDraft {
+                                ReceiptDraftBanner(draft: draft, context: .expense, themeColor: themeColor) {
+                                    withAnimation { showsDraftBanner = false }
+                                }
+                                .padding(.horizontal)
                             }
-                            .padding(.horizontal)
-                        }
-                        quickEntrySection
-                        amountSection
-                        categorySection
-                        detailsSection
-                        Spacer().frame(height: 100)
-                    }.padding(.vertical, 20)
+                            quickEntrySection
+                            amountSection
+                                .id("amount-section")
+                            categorySection
+                            detailsSection
+                            Spacer().frame(height: 100)
+                        }.padding(.vertical, 20)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    // As in 1.0, the categories sit above the keyboard while
+                    // an amount is typed; Quick Add is a short scroll up.
+                    .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidChangeNotification)) { _ in
+                        guard isInputActive, !hasRevealedCategories else { return }
+                        hasRevealedCategories = true
+                        withAnimation(.snappy) { proxy.scrollTo("amount-section", anchor: .top) }
+                    }
                 }
-                .scrollDismissesKeyboard(.interactively)
-                
+
                 VStack {
                     Button(action: saveExpense) {
                         Text(L10n.save)

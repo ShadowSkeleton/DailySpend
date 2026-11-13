@@ -279,6 +279,8 @@ final class DailySpendUITests: XCTestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["receipt-draft-banner"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["expense-amount"].value as? String, "42.51")
+        XCTAssertTrue(app.descendants(matching: .any)["receipt-draft-banner"].label.contains("scan the whole receipt again"),
+                      "The banner tells people they can rescan")
 
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = "Scanned receipt review"
@@ -550,7 +552,7 @@ final class DailySpendUITests: XCTestCase {
         words.typeText("Lunch at KFC 25")
         app.buttons["quick-entry-submit"].tap()
         let amount = app.textFields["expense-amount"]
-        wait(for: [expectation(for: NSPredicate(format: "value == %@", "25.00"), evaluatedWith: amount)], timeout: 2)
+        wait(for: [expectation(for: NSPredicate(format: "value == %@", "25.00"), evaluatedWith: amount)], timeout: 5)
         app.buttons["Save"].tap()
         XCTAssertTrue(app.staticTexts["-$25.00"].waitForExistence(timeout: 5))
 
@@ -587,6 +589,31 @@ final class DailySpendUITests: XCTestCase {
         XCTAssertFalse(app.keyboards.element.waitForExistence(timeout: 2))
 
         app.buttons["Cancel"].tap()
+    }
+
+    /// Tester feedback on 2.0 (16): with Quick Add above the amount, the number
+    /// pad hid the categories. Typing an amount brings them back into view.
+    @MainActor
+    func testCategoriesStayAboveTheKeyboardWhileTypingAnAmount() throws {
+        let add = app.buttons["Add expense"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        let amount = app.textFields["expense-amount"].firstMatch
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        amount.tap()
+        amount.typeText("12")
+        // A category in the grid's first row (the button's label includes its name).
+        // On the smallest iPhones the icons sit above Save and the names just under it.
+        let grocery = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Grocery")).firstMatch
+        let save = app.buttons["Save"]
+        let visible = expectation(for: NSPredicate { _, _ in
+            grocery.exists && save.exists && grocery.frame.midY < save.frame.minY && grocery.isHittable
+        }, evaluatedWith: nil)
+        // Hosted CI simulators can take several seconds per UI snapshot.
+        wait(for: [visible], timeout: 10)
+        XCTAssertTrue(amount.isHittable, "The amount being typed stays in view")
+        attachScreenshot(named: "Categories above the keyboard")
+        grocery.tap()
     }
 
     @MainActor

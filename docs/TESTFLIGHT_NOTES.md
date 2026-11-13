@@ -1,6 +1,24 @@
 # DailySpend — TestFlight notes
 
-## Version 2.0 (16) — not yet uploaded
+## Version 2.0 (17)
+
+Two small fixes on top of 2.0 (16). Paste as "What to Test" for build 17 and confirm the uploaded build number in App Store Connect.
+
+> Thanks for testing 2.0! Build 17 fixes two things you told us about:
+>
+> - **Categories stay above the keyboard:** when you type an amount in New Expense, the screen moves up so the categories are right above the number pad again. Quick Add is a short scroll up.
+> - **Rescan tip:** after a scan, DailySpend reminds you that you can scan again. If an amount looks wrong, lay the whole receipt flat in good light with all four edges in view and scan once more; a fresh scan usually reads it correctly.
+>
+> Install over build 16 (don't delete the app) and check that your expenses and totals are unchanged.
+
+> 感谢测试 2.0！第 17 版修正了大家反馈的两个问题：
+>
+> - **分类不再被键盘挡住：**在“新支出”里输入金额时，页面会自动上移，分类就在数字键盘正上方。一句话记账往上滑一下就能看到。
+> - **重新扫描提示：**扫描后会提醒你可以重新扫描。如果金额看起来不对，把整张收据平放、光线充足、四边都拍进去，再扫一次，通常就能读对。
+>
+> 直接覆盖安装第 16 版（不要删除 App），并确认原有支出和总额没有变化。
+
+## Version 2.0 (16)
 
 Paste after the release quality and data-safety reviews, and confirm the uploaded build number in App Store Connect. Tester backup messages and the Beta App Description are in `docs/TESTER_DATA_WORKFLOW.md` → "Version 2.0 TestFlight cycle".
 
