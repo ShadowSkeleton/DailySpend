@@ -429,6 +429,14 @@ struct ReceiptDraftBanner: View {
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if hasScanIssues {
+                    Label(L10n.isZh ? "试试重新扫描：把整张收据平放，光线充足，四边都拍进去。重新扫描通常就能读对。"
+                                    : "Try scanning again: lay the whole receipt flat in good light with all four edges in view. A fresh scan usually fixes this.",
+                          systemImage: "arrow.clockwise")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ForEach(notes, id: \.self) { message in
                     Label(message, systemImage: "info.circle")
                         .font(.footnote)
@@ -488,11 +496,18 @@ struct ReceiptDraftBanner: View {
         return themeColor
     }
 
+    /// A check failed on what was read, not just an older receipt date.
+    private var hasScanIssues: Bool {
+        draft.issues.contains { message(for: $0) != nil }
+    }
+
     private var disclaimer: String {
-        draft.source == .appleIntelligence
+        // When a check failed, the rescan tip above already says this.
+        let retry = hasScanIssues ? "" : (L10n.isZh ? "如有不对，请重新扫描整张收据。" : " If something looks off, scan the whole receipt again.")
+        return draft.source == .appleIntelligence
             ? (L10n.isZh ? "由 Apple 智能在本机读取。AI 可能出错，请核对重要信息。"
-                         : "Read on this device by Apple Intelligence. AI can make mistakes, so check important details.")
-            : (L10n.isZh ? "在本机读取。保存前请核对金额。" : "Read on this device. Check the amount before saving.")
+                         : "Read on this device by Apple Intelligence. AI can make mistakes, so check important details.") + retry
+            : (L10n.isZh ? "在本机读取。保存前请核对金额。" : "Read on this device. Check the amount before saving.") + retry
     }
 
     private var summary: String {
