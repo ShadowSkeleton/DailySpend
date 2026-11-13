@@ -10,7 +10,8 @@ October 28, 2026 (sources at the end).
 
 | Folder | Size | Use |
 |---|---|---|
-| `iPhone-6.9/en`, `iPhone-6.9/zh` | 1320 × 2868 | iPhone screenshots (App Store Connect scales them for smaller iPhones) |
+| `iPhone-6.3/en`, `iPhone-6.3/zh` | 1206 × 2622 | **Upload these** to the "iPhone with Dynamic Island (medium display)" slot; files end in `-1206x2622` |
+| `iPhone-6.9/en`, `iPhone-6.9/zh` | 1320 × 2868 | Full-size masters (the medium-display slot rejects this size) |
 | `iPad-13/en`, `iPad-13/zh` | 2064 × 2752 | iPad 13-inch screenshots |
 | `Creative-Assets/<lang>/header-21x9-3840x1646.png` | 21:9 | Product page header |
 | `Creative-Assets/<lang>/search-3x2-3840x2560.png` | 3:2 | Search results |
@@ -20,9 +21,10 @@ October 28, 2026 (sources at the end).
 All are PNG without transparency. Every screen is a real 2.0 (16) screen
 captured on a simulator with fictional sample data (no personal data).
 
-If App Store Connect also asks for a smaller iPhone size (it lists the
-required slots on the version page), upload the same 6.9-inch set there only
-if it accepts it; otherwise tell me the size and I'll export it.
+In November 2026 the version page's iPhone slot was "iPhone with Dynamic
+Island (medium display)", which accepts 1179 × 2556 or 1206 × 2622 and
+rejected the 6.9-inch files, so the 6.3-inch set is the one to upload. The
+Chinese images use the owner's final wording (November 13, 2026).
 
 ## 2. Product page screenshots (version 2.0)
 
@@ -31,14 +33,14 @@ Upload in this order, English under **English (U.S.)** and Chinese under
 
 | # | File | Headline (EN / ZH) |
 |---|---|---|
-| 1 | `01-scan-receipt.png` | Snap a receipt. It fills itself in. / 拍一下收据，自动填好 |
-| 2 | `02-split-by-item.png` | Split by item. Pay just your share. / 按项分账，各付各的 |
-| 3 | `03-quick-add.png` | Type it like you'd say it. / 像说话一样记账 |
-| 4 | `04-insights.png` | Your month at a glance. / 本月花费，一眼看清 |
-| 5 | `05-budget.png` | Budgets you can see. / 预算看得见 |
-| 6 | `06-categories.png` | Every category, clearly. / 每个分类，清清楚楚 (dark) |
-| 7 | `07-privacy.png` | Yours alone. / 数据只属于你 (dark) |
-| — | `08-split-shares.png` | Everyone's share, to the cent. / 每人应付，精确到分 (for the Split custom page) |
+| 1 | `01-scan-receipt.png` | Snap a receipt. It fills itself in. / 小票拍一下，账目自己填 |
+| 2 | `02-split-by-item.png` | Split by item. Pay just your share. / 按菜算账，谁吃谁付 |
+| 3 | `03-quick-add.png` | Type it like you'd say it. / 会说话，就会记账 |
+| 4 | `04-insights.png` | Your month at a glance. / 这个月花多少，一眼有数 |
+| 5 | `05-budget.png` | Budgets you can see. / 预算还剩多少，心里有底 |
+| 6 | `06-categories.png` | Every category, clearly. / 每笔分类，安排得明明白白 (dark) |
+| 7 | `07-privacy.png` | Yours alone. / 你的账本，只归你管 (dark) |
+| — | `08-split-shares.png` | Everyone's share, to the cent. / AA 算到分，谁也不吃亏 (for the Split custom page) |
 
 The Chinese set shows yuan amounts, which is what a person in mainland
 China sees (DailySpend uses the region's currency).
@@ -67,9 +69,9 @@ after it); once approved, turn each one to visible.
 
 | Page | Screenshots, in order | Promotional text (EN / ZH) | Keywords (EN / ZH) | Deep link |
 |---|---|---|---|---|
-| **Receipt Scanner** | 01, 03, 02, 04, 05 | Scan any receipt. It fills itself in, on your iPhone. / 扫描收据，自动填好，全部在 iPhone 上完成。 | receipt, scanner, expense, tracker / 收据, 扫描, 记账 | `dailyspend://scan` |
-| **Split with Friends** | 02, 08, 01, 03, 07 | Split dinner by dish, tax and tip included. / 聚餐按项分账，税和小费自动算好。 | bill, splitter, tip, calculator, group, shared / 分账, AA, 小费 | none |
-| **Budget Calmly** | 04, 05, 06, 03, 07 | Know how this month is going, in one look. / 这个月花得怎么样，一眼就知道。 | budget, money, finance / 预算, 省钱, 理财 | `dailyspend://home` |
+| **Receipt Scanner** | 01, 03, 02, 04, 05 | Scan any receipt. It fills itself in, on your iPhone. / 小票拍一下，账目自己填，一切全在 iPhone 上本地完成。 | receipt, scanner, expense, tracker / 收据, 扫描, 记账 | `dailyspend://scan` |
+| **Split with Friends** | 02, 08, 01, 03, 07 | Split dinner by dish, tax and tip included. / 聚餐按菜算账，谁吃谁付，连税带小费一并摊平。 | bill, splitter, tip, calculator, group, shared / 分账, AA, 小费 | none |
+| **Budget Calmly** | 04, 05, 06, 03, 07 | Know how this month is going, in one look. / 这个月是省了还是飘了，一眼心里有数。 | budget, money, finance / 预算, 省钱, 理财 | `dailyspend://home` |
 
 Notes:
 
@@ -88,9 +90,9 @@ Notes:
 
 | Field | English | Chinese |
 |---|---|---|
-| Event name (30) | DailySpend 2.0 is here | DailySpend 2.0 全新上线 |
-| Short description (50) | Scan receipts, split by item, log in plain words. | 扫描收据、按项分账、一句话记账。 |
-| Long description (120) | Snap a receipt and it fills itself in. Split dinner by dish, log in plain words, and see your month at a glance. | 拍一下收据自动填好，聚餐按项分账，一句话就能记账，本月花费一眼看清。全部在你的 iPhone 上完成。 |
+| Event name (30) | DailySpend 2.0 is here | DailySpend 2.0 来了 |
+| Short description (50) | Scan receipts, split by item, log in plain words. | 拍小票、按菜分账、张口就记，样样顺手。 |
+| Long description (120) | Snap a receipt and it fills itself in. Split dinner by dish, log in plain words, and see your month at a glance. | 小票拍一下账目自己填，聚餐按菜算账谁吃谁付，张口说一句就能记账，本月花费一眼有数。一切全在你的 iPhone 上本地完成。 |
 | Event card | `event-card-16x9…` | same, `zh` |
 | Event details | `event-details-9x16…` | same, `zh` |
 

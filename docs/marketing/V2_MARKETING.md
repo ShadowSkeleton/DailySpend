@@ -11,7 +11,7 @@ What's New 4,000).
 ## 1. The idea in one line
 
 **Snap it. Say it. Split it. See it.**
-**拍一下，说一句，分得清，看得明。**
+**拍一拍，说一声，分得清，看得明。**
 
 2.0 removes the typing from expense tracking. You scan a receipt, or say or
 type one sentence, and DailySpend fills in the rest. Splitting with friends
@@ -43,15 +43,15 @@ the listing familiar to 1.0 users.
 | `Scan Receipts & Split Bills` | 27 | **Recommended.** Leads with the two most searched 2.0 features. |
 | `Expense Tracker & Bill Split` | 28 | Safer for "expense tracker" searches. |
 | `Budget, Receipts & Bill Split` | 29 | If budgeting is the main audience. |
-| `扫描收据，轻松记账分账` | 11 | Chinese (Simplified) localization. |
+| `拍小票记账，按菜算分账` | 11 | Chinese (Simplified) localization (owner's final wording). |
 
 ### Promotional text (170 max; can change any time without review)
 
 EN (162):
 > New in 2.0: scan a receipt and DailySpend fills it in. Split a bill line by line, add expenses in plain words, and see your month at a glance, all on your iPhone.
 
-ZH (63):
-> 2.0 全新上线：扫描收据自动填写，按项轻松分账，一句话就能记账，统计速览一眼看清本月花费。全部在你的 iPhone 上完成。
+ZH (95):
+> DailySpend 2.0 来了。小票拍一下，账目自己填；聚餐按菜算，谁吃谁付账；张口说一句，支出就入账；这个月是省了还是飘了，一眼心里有数。一切计算，全在你的 iPhone 上本地完成。
 
 ### Keywords (100 max, commas, no spaces)
 
@@ -68,6 +68,10 @@ ZH (44):
 记账,收据,扫描,预算,分账,AA,账本,花费,支出,小费,省钱,理财,消费,账单,家庭
 ```
 
+The Chinese subtitle already contains 小票, 记账, and 分账, so 记账 and 分账
+repeat here. There are 56 characters to spare for more terms (for example
+开销, 收支, 聚餐, 饭钱).
+
 ### What's New in This Version
 
 EN:
@@ -83,16 +87,19 @@ EN:
 > Receipts are read on your iPhone and never saved or sent. Scanning each item needs Apple Intelligence; every iPhone reads the total.
 
 ZH:
-> DailySpend 2.0 让记账不再需要一笔笔输入。
+> DailySpend 2.0，让好用的记账从不让你手动打字开始。
 >
-> • 扫描收据：点首页的扫描按钮，金额、商家、日期和分类自动填好，由你确认。
-> • 用收据分账：扫描到“快速分账”自动填总额和小费，或用“按项分账”点选每一项由谁分摊，税和小费自动分好。
-> • 一句话记账：像说话一样输入，比如“和 Alex 吃午饭 25”或“昨天打车 23 块”。
-> • Siri 和控制：说“在DailySpend里记一笔”，或把“扫描收据”“记一笔”加到控制中心、锁定屏幕或操作按钮。
-> • 统计速览：本月与上月同期相比多花还是少花，变化最大的是什么，一眼看清。
-> • 首次打开 2.0 会有简短介绍，并可一键创建加密备份。
+> • 拍小票记账：轻点首页扫描按钮，金额、商家、日期和分类自动填好，你只管确认。
+> • 拿小票分账：扫入“快速分账”，总额和小费自动就位；或者用“按项分账”，点一下谁吃了什么，税费和小费自动摊平。
+> • 会说话就会记账：像平时聊天一样输入，比如“和 Alex 吃午饭 25”或“昨天打车 23 块”，剩下的交给它。
+> • Siri 和快捷控制：说声“在DailySpend里记一笔”，或者把“扫描收据”、“记一笔”放进控制中心、锁定屏幕或操作按钮，抬手就记。
+> • 统计速览：对比上月同期，是省了还是飘了，哪项开销变化最大，一眼心里有数。
+> • 首次打开 2.0 会有简短向导，还能顺手建个加密备份。
 >
-> 收据只在你的 iPhone 上读取，不会被保存或上传。按项扫描需要 Apple 智能；所有 iPhone 都能识别总额。
+> 你的小票只在 iPhone 上本地读取，既不保存，也不上传。按项扫描需要 Apple 智能；所有 iPhone 都能识别总额。
+
+The Siri phrase "在DailySpend里记一笔" must match the app's phrase exactly
+(no spaces around DailySpend).
 
 ### Description — new opening (replace the first paragraph)
 
@@ -117,24 +124,24 @@ EN:
 > Item-by-item scanning and some summaries use Apple Intelligence on supported devices with iOS 26 or later. Every device can scan totals and use all other features.
 
 ZH:
-> DailySpend 是记账和朋友分账最简单的方式。扫描收据，或者输入一句“和 Alex 吃午饭 25”，其余的都会自动填好。所有计算都在你的 iPhone 上完成：无需注册，没有广告。
+> DailySpend 是记账和朋友 AA 分账最顺手的方式。小票拍一下，或者输入一句“和 Alex 吃午饭 25”，其余的它自己会填。所有计算全在你的 iPhone 上本地完成：不用建账号，也没有广告。
 >
-> 拍一下收据
-> 点扫描，金额、商家、日期和分类自动填写。确认后保存。
+> 小票拍一下，账目自己填
+> 轻点扫描，金额、商家、日期和分类自动就位。看一眼，确认保存。
 >
-> 分得清清楚楚
-> 在“分账”里扫描餐厅账单。“快速分账”填好总额和小费，“按项分账”点选每道菜由谁分摊，税和小费精确到分。
+> 按菜算账，谁也不吃亏
+> 在“分账”里扫一下餐厅小票。“快速分账”帮你填好总额和小费；“按项分账”点选每道菜由谁分摊，连税带小费精确到分。
 >
-> 说一句就记好
-> 一句话记账能听懂日常说法。Siri、快捷指令、控制中心和操作按钮一步记账或打开扫描。
+> 会说话，就会记账
+> 一句话记账听得懂日常说法。配合 Siri、快捷指令、控制中心和操作按钮，一步就能记账或打开扫描。
 >
-> 看清这个月
-> “统计”页顶部是速览：本月与上月同期相比如何，哪个分类变化最大。图表和详情一点就有。
+> 这个月花多少，一眼有数
+> “统计”页顶部就是速览：对比上月同期是省了还是飘了，哪个分类变化最大，一目了然。图表和明细，轻点即现。
 >
-> 数据只属于你
-> 预算、小组件、面容 ID 应用锁、加密备份，以及可选的 iCloud 多设备同步。DailySpend 不收集你的数据。
+> 你的账本，只归你管
+> 预算管理、桌面小组件、面容 ID 应用锁、加密备份，还有可选的 iCloud 多设备同步。DailySpend 从不收集你的数据。
 >
-> 按项扫描和部分总结使用 Apple 智能，需要 iOS 26 或更高版本的受支持设备。所有设备都能扫描总额并使用其他全部功能。
+> 按项扫描和部分智能总结功能由 Apple 智能驱动，需在运行 iOS 26 或更高版本的受支持设备上使用。所有设备均可扫描总额及使用其他全部功能。
 
 ## 3. Claims to keep true
 
@@ -157,6 +164,11 @@ words ("Works with Siri"). Don't suggest Apple endorses DailySpend.
 
 ## 4. Screenshots
 
+> **This section is the original plan.** The final screenshots (headlines,
+> order, and files) are listed in [V2_STOREFRONT.md](V2_STOREFRONT.md),
+> section 2; the frames changed from this plan (for example, frame 5 became
+> "Budgets you can see" and frame 6 "Every category, clearly").
+
 Seven frames, the same order on iPhone and iPad. The first three carry the
 listing (most people never swipe past them). Capture from the Debug sample
 data (`-seed-demo-data`) in an isolated simulator, never personal data; use
@@ -173,15 +185,8 @@ Make an English and a Chinese set.
 | 6 | **Budgets you can see.** | Widgets show what's left, App Lock keeps it private. | Home Screen with the medium widget + Home budget card |
 | 7 | **Yours alone.** | No account. No ads. Encrypted backups and optional iCloud sync. | Settings: iCloud card + Data Management |
 
-Chinese headlines:
-
-1. 拍一下收据，自动填好
-2. 按项分账，各付各的
-3. 像说话一样记账
-4. 本月花费，一眼看清
-5. 随时一点就记
-6. 预算看得见
-7. 数据只属于你
+Chinese headlines: see the final set in [V2_STOREFRONT.md](V2_STOREFRONT.md),
+section 2.
 
 Design notes, matching the app:
 
@@ -245,9 +250,9 @@ Product page optimization (A/B test), one at a time:
 
 Use the **Major Update** event type:
 
-- **Name:** DailySpend 2.0 is here (EN) / DailySpend 2.0 全新上线 (ZH)
-- **Short description:** Scan receipts, split by item, and log in plain words.
-- **Long description:** reuse the What's New bullets.
+- **Name:** DailySpend 2.0 is here (EN) / DailySpend 2.0 来了 (ZH)
+- **Short description:** Scan receipts, split by item, and log in plain words. / 拍小票、按菜分账、张口就记，样样顺手。
+- **Long description:** see [V2_STOREFRONT.md](V2_STOREFRONT.md), section 5.
 - **Event card image:** header idea A.
 - **Duration:** two weeks after release.
 
@@ -278,8 +283,8 @@ Insights and budgets.
 
 ## 8. Taglines to reuse
 
-- Snap it. Say it. Split it. See it. / 拍一下，说一句，分得清，看得明。
-- Expense tracking without the typing. / 记账，不用一笔笔输入。
+- Snap it. Say it. Split it. See it. / 拍一拍，说一声，分得清，看得明。
+- Expense tracking without the typing. / 好用的记账，从不让你手动打字开始。
 - Split dinner by dish, to the cent. / 聚餐按菜分，精确到分。
 - Know your month in one look. / 这个月花了多少，一眼就知道。
 - On your iPhone. No account. No ads. / 都在你的 iPhone 上。无需注册，没有广告。
