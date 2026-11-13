@@ -30,7 +30,7 @@ An expense tracker and bill splitter for iPhone and iPad that does the typing fo
   <tr>
     <td align="center"><img src="docs/images/readme/04-insights.jpg" alt="Insights compares this month with last month" width="230"><br><b>See your month</b><br><sub>This month against the same days last month, in one sentence.</sub></td>
     <td align="center"><img src="docs/images/readme/05-budget.jpg" alt="Budgets and category limits" width="230"><br><b>Budgets you can see</b><br><sub>Monthly and category limits with gentle reminders.</sub></td>
-    <td align="center"><img src="docs/images/readme/07-privacy.jpg" alt="Privacy and encrypted backups" width="230"><br><b>Yours alone</b><br><sub>No account, no ads. Optional iCloud sync and encrypted backups.</sub></td>
+    <td align="center"><img src="docs/images/readme/08-split-shares.jpg" alt="Each person's share of a split bill" width="230"><br><b>Everyone's share, to the cent</b><br><sub>Each person's total with tax and tip, ready to send as a receipt.</sub></td>
   </tr>
 </table>
 
